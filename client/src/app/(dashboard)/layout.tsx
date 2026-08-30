@@ -12,18 +12,14 @@ import { SiteHeader } from "@/components/site-header";
 import { ThemeCustomizer, ThemeCustomizerTrigger } from "@/components/theme-customizer";
 import { Button } from "@/components/ui/button";
 import { SidebarInset,SidebarProvider } from "@/components/ui/sidebar";
-import { flattenNavLeaves } from "@/config/nav-config";
+import { isRouteAuthorized } from "@/config/nav-config";
 import { useLogoutMutation } from "@/features/auth/authApi";
 import { logout } from "@/features/auth/authSlice";
 import { useSidebarConfig } from "@/hooks/use-sidebar-config";
-import { getPrimaryRole,getUserRoles, hasAccess } from "@/lib/access-control";
+import { getPrimaryRole, getUserRoles } from "@/lib/access-control";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 
 const AUTHORIZED_ROLES = ["SUPER_ADMIN", "ADMIN", "TEACHER", "USER", "GUARDIAN"];
-
-// Leaves sorted longest-url-first so a more specific route (e.g. /users/roles)
-// is matched before a shorter sibling prefix (e.g. /users).
-const navLeavesByUrlLength = flattenNavLeaves().sort((a, b) => b.url.length - a.url.length);
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -48,18 +44,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   // Derived from the same nav-config tree that drives the sidebar, so a route's
   // access requirement can never drift from what's shown as a menu item for it.
-  const isRouteAuthorized = React.useMemo(() => {
-    const matchedLeaf = navLeavesByUrlLength.find(
-      (leaf) => pathname === leaf.url || pathname.startsWith(`${leaf.url}/`),
-    );
-    // Routes with no nav entry default to "any authenticated role", same as before.
-    if (!matchedLeaf) return true;
-    // Hidden (descoped) and disabled (no backing page) leaves stay in the config purely so this
-    // guard keeps matching their URL. Neither should be reachable by typing it directly — dropping
-    // them from the config instead would fall through to the "any authenticated role" default above.
-    if (matchedLeaf.hidden || matchedLeaf.disabled) return false;
-    return hasAccess(user, matchedLeaf.requirement);
-  }, [pathname, user]);
+  // The rule itself lives in nav-config so it is testable without rendering
+  // this shell — see nav-config.test.ts.
+  const routeAuthorized = React.useMemo(
+    () => isRouteAuthorized(pathname, user),
+    [pathname, user],
+  );
 
   // Auth state is already settled by AuthInitializer before this layout mounts,
   // so an unauthenticated user here is final — send them to login instead of
@@ -94,7 +84,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  if (!hasAuthorizedRole || !isRouteAuthorized) {
+  if (!hasAuthorizedRole || !routeAuthorized) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-6">
         <div className="w-full max-w-md space-y-6 rounded-3xl border border-border bg-card p-8 text-center shadow-lg">

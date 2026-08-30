@@ -29,7 +29,7 @@ import {
   UsersRound,
 } from "lucide-react";
 
-import type { NavRequirement, PrimaryRole } from "@/lib/access-control";
+import { type AuthUser, hasAccess, type NavRequirement, type PrimaryRole } from "@/lib/access-control";
 
 export interface NavLeaf {
   title: string;
@@ -335,4 +335,36 @@ export function navTitle(leaf: NavLeaf, role: PrimaryRole): string {
  */
 export function flattenNavLeaves(groups: NavGroup[] = navGroups): NavLeaf[] {
   return [...portalHomeLeaves, ...groups.flatMap((group) => group.items)];
+}
+
+// Longest-url-first so a more specific route (/users/roles) is matched before
+// a shorter sibling prefix (/users).
+const leavesByUrlLength = flattenNavLeaves().sort((a, b) => b.url.length - a.url.length);
+
+/** The nav entry governing a path, or undefined when no entry claims it. */
+export function resolveNavLeaf(pathname: string): NavLeaf | undefined {
+  return leavesByUrlLength.find(
+    (leaf) => pathname === leaf.url || pathname.startsWith(`${leaf.url}/`),
+  );
+}
+
+/**
+ * Whether a user may open a dashboard route.
+ *
+ * Lives here rather than in the layout that calls it so the rule can be tested
+ * directly: it decides who reaches which page, and a component-level useMemo is
+ * only reachable by rendering the whole shell.
+ */
+export function isRouteAuthorized(
+  pathname: string,
+  user: AuthUser | null | undefined,
+): boolean {
+  const matchedLeaf = resolveNavLeaf(pathname);
+  // Routes with no nav entry default to "any authenticated role", same as before.
+  if (!matchedLeaf) return true;
+  // Hidden (descoped) and disabled (no backing page) leaves stay in the config purely so this
+  // guard keeps matching their URL. Neither should be reachable by typing it directly — dropping
+  // them from the config instead would fall through to the "any authenticated role" default above.
+  if (matchedLeaf.hidden || matchedLeaf.disabled) return false;
+  return hasAccess(user, matchedLeaf.requirement);
 }
