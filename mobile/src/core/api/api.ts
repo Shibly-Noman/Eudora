@@ -37,6 +37,7 @@ export const api = createApi({
     'LiveSession',
     'Entitlements',
     'Orders',
+    'Story',
   ],
   endpoints: () => ({}),
 });

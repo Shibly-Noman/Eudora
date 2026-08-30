@@ -8,13 +8,19 @@ on:
   pull_request:
 
 jobs:
-  # Clio's phrase catalog is authored once in voice/clio-phrases.json and
-  # generated into both clients, because client/ and mobile/ are independent
-  # pnpm projects with no import path between them. This is what stops the
-  # generated copies being hand-edited and drifting apart again — which is
-  # exactly what happened to the two catalogs this replaced.
-  voice-catalog:
-    name: Voice catalog in sync
+  # Things defined once and copied into client/ and mobile/, which are
+  # independent pnpm projects with no import path between them. Every copy here
+  # has drifted at least once, silently, because nothing type-checks a copy
+  # against its source:
+  #
+  #   - Clio's phrase catalog, authored in voice/clio-phrases.json. The two
+  #     hand-maintained copies it replaced had already diverged on a key name.
+  #   - ModuleItemKind, authored in schema.prisma. Mobile's copy went stale
+  #     twice; the second time a STORY item crashed the item screen, because an
+  #     exhaustive switch can catch a missing case but not a missing union
+  #     member.
+  contracts:
+    name: Contracts in sync
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -25,6 +31,9 @@ jobs:
           node-version: 22
       - name: Check generated catalogs match voice/clio-phrases.json
         run: node voice/generate-voice-lines.mjs --check
+
+      - name: Check client unions match the ModuleItemKind enum
+        run: node scripts/check-module-item-kinds.mjs
 
   frontend:
     name: Frontend CI

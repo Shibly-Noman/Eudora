@@ -162,7 +162,8 @@ export type ModuleItemKind =
   | 'DISCUSSION'
   | 'ASSESSMENT'
   | 'HOMEWORK'
-  | 'LIVE_CLASS';
+  | 'LIVE_CLASS'
+  | 'STORY';
 export type CatalogStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 
 export interface LearningSubject {
@@ -1009,4 +1010,44 @@ export interface GradebookSummary {
 /** `POST /auth/device/approve` — approving a TV pairing code from the phone. */
 export interface ApproveDevicePairingResponse {
   approved: true;
+}
+
+/**
+ * A narrated story, as `GET /stories/by-module-item/:id` returns it.
+ *
+ * Media arrives as a path, not a full URL, and always points at the API's own
+ * routes rather than the object store — those routes re-check entitlement on
+ * every request. Playing one therefore needs the bearer token attached, which
+ * is why the player builds sources with headers rather than handing a bare
+ * string to the audio element.
+ */
+export interface StoryAsset {
+  id: string;
+  url: string;
+  altText: string;
+}
+
+export interface StorySegment {
+  id: string;
+  text: string;
+  /** The same words with emotion markup, or null for plain delivery. */
+  narrationText: string | null;
+  narrationUrl: string | null;
+  narrationDurationMs: number | null;
+  assets: StoryAsset[];
+}
+
+export interface StoryChapter {
+  id: string;
+  title: string | null;
+  segments: StorySegment[];
+}
+
+export interface Story {
+  id: string;
+  title: string;
+  synopsis: string | null;
+  cover: StoryAsset | null;
+  chapters: StoryChapter[];
+  characters: { id: string; name: string; description: string | null }[];
 }

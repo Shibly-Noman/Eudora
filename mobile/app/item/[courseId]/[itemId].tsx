@@ -12,6 +12,7 @@ import { DiscussionItemView } from '@/features/lesson/DiscussionItemView';
 import { HomeworkItemView } from '@/features/lesson/HomeworkItemView';
 import { LiveClassItemView } from '@/features/lesson/LiveClassItemView';
 import { ReadingItemView } from '@/features/lesson/ReadingItemView';
+import { StoryItemView } from '@/features/story/StoryItemView';
 import { VideoItemView } from '@/features/lesson/VideoItemView';
 import { Text } from '@/ui/primitives/Text';
 import { useTheme } from '@/ui/theme/ThemeProvider';
@@ -39,6 +40,8 @@ function renderItem(item: ModuleItem, courseId: string): React.ReactElement {
       return <HomeworkItemView item={item} courseId={courseId} />;
     case 'LIVE_CLASS':
       return <LiveClassItemView item={item} courseId={courseId} />;
+    case 'STORY':
+      return <StoryItemView item={item} courseId={courseId} />;
   }
 }
 

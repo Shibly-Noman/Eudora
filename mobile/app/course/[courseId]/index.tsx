@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
+  BookHeadphones,
   CheckCircle2,
   ChevronLeft,
   Circle,
@@ -34,6 +35,7 @@ const kindIcon: Record<ModuleItemKind, React.ElementType> = {
   ASSESSMENT: ClipboardList,
   HOMEWORK: NotebookPen,
   LIVE_CLASS: Radio,
+  STORY: BookHeadphones,
 };
 
 export default function CourseOutlineScreen() {
