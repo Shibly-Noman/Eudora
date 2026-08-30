@@ -1051,3 +1051,21 @@ export interface Story {
   chapters: StoryChapter[];
   characters: { id: string; name: string; description: string | null }[];
 }
+
+/**
+ * A card in the standalone story library. Content-free on purpose — the list
+ * shows every published story and none of their text, so the payload carries
+ * what a cover needs and nothing else.
+ *
+ * Unlike a course story, this one is free to any signed-in child: the API lets
+ * PUBLISHED through its read gate without an entitlement.
+ */
+export interface StoryLibraryItem {
+  id: string;
+  title: string;
+  synopsis: string | null;
+  gradeBand: string | null;
+  coverUrl: string | null;
+  pageCount: number;
+  narrated: boolean;
+}

@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { ArrowLeftRight, Award, BookOpen, ClipboardCheck, ClipboardList, Flame, Gem, Settings, Star, Trophy } from 'lucide-react-native';
+import { ArrowLeftRight, Award, BookHeadphones, BookOpen, ClipboardCheck, ClipboardList, Flame, Gem, Settings, Star, Trophy } from 'lucide-react-native';
 import React from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -212,12 +212,35 @@ export function StudentHomeScreen({ onExitChildView }: StudentHomeScreenProps = 
 
       <View style={{ height: t.spacing.md }} />
 
-      <Pressable onPress={() => router.push('/assessments')} accessibilityRole="button">
-        <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-          <ClipboardCheck size={18} color={t.colors.primary} />
-          <Text variant="label">Assessments</Text>
-        </Card>
-      </Pressable>
+      <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+        <Pressable
+          onPress={() => router.push('/assessments')}
+          accessibilityRole="button"
+          style={{ flex: 1 }}
+        >
+          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+            <ClipboardCheck size={18} color={t.colors.primary} />
+            <Text variant="label">Assessments</Text>
+          </Card>
+        </Pressable>
+        {/*
+          The one tile here that does not depend on owning a course — published
+          stories are free — so it stays visible for a family that has bought
+          nothing yet, which is exactly who has least to tap otherwise.
+        */}
+        <Pressable
+          onPress={() => router.push('/story-library')}
+          accessibilityRole="button"
+          style={{ flex: 1 }}
+        >
+          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+            <BookHeadphones size={18} color={t.colors.primary} />
+            <Text variant="label" style={{ flex: 1 }}>
+              Stories
+            </Text>
+          </Card>
+        </Pressable>
+      </View>
 
       <View style={{ height: t.spacing.lg }} />
 
