@@ -12,6 +12,10 @@ import {
 const MAX_QUESTION_CHARS = 500;
 
 export class AskStoryDto {
+  @IsUUID()
+  @IsOptional()
+  releaseId?: string;
+
   /**
    * The question as text. Either this or `audio` must be present; audio wins
    * when both are, because a client that recorded something meant to send it.

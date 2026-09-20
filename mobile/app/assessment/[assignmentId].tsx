@@ -2,9 +2,10 @@ import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { CheckCircle2, X, XCircle } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { resolveUploadUrl } from '@/core/api/baseQuery';
 import type {
   AssessmentAttempt,
   AttemptQuestionQuestion,
@@ -36,6 +37,7 @@ function toCardQuestion(q: AttemptQuestionQuestion): CardQuestion {
   return {
     id: q.id,
     prompt: q.prompt,
+    promptImageUrl: q.promptImageUrl,
     questionType: q.questionType,
     widgetType: q.widgetType,
     widgetConfig: q.widgetConfig,
@@ -314,6 +316,22 @@ export default function AssessmentPlayerScreen() {
         </Text>
         <View style={{ height: t.spacing.md }} />
         <MathText variant="label">{card.question.prompt}</MathText>
+        {card.question.promptImageUrl ? (
+          <>
+            <View style={{ height: t.spacing.md }} />
+            <Image
+              source={{ uri: resolveUploadUrl(card.question.promptImageUrl) ?? undefined }}
+              accessibilityLabel="Question prompt"
+              resizeMode="contain"
+              style={{
+                width: '100%',
+                height: 200,
+                borderRadius: t.radius.lg,
+                backgroundColor: t.colors.muted,
+              }}
+            />
+          </>
+        ) : null}
         <View style={{ height: t.spacing.lg }} />
 
         <WidgetSelector

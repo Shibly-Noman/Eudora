@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { StoryAgentService } from './story-agent.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GeminiService } from '../ai/gemini.service';
@@ -34,6 +34,7 @@ describe('StoryAgentService', () => {
   };
 
   const mockPrisma: any = {
+    storyRelease: { findFirst: jest.fn().mockResolvedValue(null) },
     story: { findUnique: jest.fn() },
     storyConversation: {
       create: jest.fn(),
@@ -89,6 +90,23 @@ describe('StoryAgentService', () => {
     });
 
   describe('grounding', () => {
+    it('rejects a page outside the story before processing a recorded question', async () => {
+      mockGemini.transcribe.mockResolvedValue('What happens next?');
+      await expect(
+        askDemo({
+          segmentId: 'page-from-another-story',
+          text: undefined,
+          audio: { buffer: Buffer.from('pcm'), mimeType: 'audio/webm' },
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(mockGemini.transcribe).not.toHaveBeenCalled();
+      expect(mockGemini.converse).not.toHaveBeenCalled();
+      expect(mockSpeech.synthesize).not.toHaveBeenCalled();
+      expect(mockPrisma.storyConversation.create).not.toHaveBeenCalled();
+      expect(mockPrisma.storyTurn.create).not.toHaveBeenCalled();
+    });
+
     it('withholds everything past the segment the child has reached', async () => {
       await askDemo({ segmentId: 'seg-1' });
 

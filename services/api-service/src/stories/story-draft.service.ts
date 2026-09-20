@@ -4,6 +4,7 @@ import {
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { z } from 'zod';
 import { GeminiService } from '../ai/gemini.service';
 import { narrationMatchesText, stripNarrationTags } from './narration-text';
 
@@ -22,6 +23,25 @@ import { narrationMatchesText, stripNarrationTags } from './narration-text';
 
 /** A whole story, pasted. Long enough for a picture book, not a novel. */
 const MAX_SOURCE_CHARS = 20_000;
+
+const generatedDraftSchema = z.object({
+  title: z.string().nullish(),
+  synopsis: z.string().nullish(),
+  chapters: z.array(
+    z.object({
+      title: z.string().nullish(),
+      segments: z.array(
+        z.object({
+          text: z.string(),
+          narrationText: z.string().nullish(),
+        }),
+      ),
+    }),
+  ),
+  characters: z
+    .array(z.object({ name: z.string(), description: z.string().nullish() }))
+    .nullish(),
+});
 
 export interface DraftSegment {
   text: string;
@@ -86,7 +106,20 @@ export class StoryDraftService {
       maxOutputTokens: Math.min(60_000, 16_000 + source.length),
     });
 
-    return this.parse(raw, params.title);
+    const draft = this.parse(raw, params.title);
+    const proposedText = draft.chapters
+      .flatMap((chapter) => chapter.segments.map((segment) => segment.text))
+      .join(' ');
+    // Paragraph breaks and page boundaries may change; words, punctuation,
+    // and their order must not. Do not trust a prompt to enforce this contract.
+    const normalizeWhitespace = (text: string) =>
+      text.replace(/\s+/gu, ' ').trim();
+    if (normalizeWhitespace(proposedText) !== normalizeWhitespace(source)) {
+      throw new ServiceUnavailableException(
+        'The prepared draft changed the original story. Your text has not been saved; try again.',
+      );
+    }
+    return draft;
   }
 
   private instruction(): string {
@@ -139,9 +172,9 @@ export class StoryDraftService {
       );
     }
 
-    let parsed: any;
+    let decoded: unknown;
     try {
-      parsed = JSON.parse(raw.slice(start, end + 1));
+      decoded = JSON.parse(raw.slice(start, end + 1));
     } catch {
       // Both ends, not the first 200 characters. The usual cause is the reply
       // being cut off mid-object, and a head-only log looks identical to a
@@ -155,19 +188,27 @@ export class StoryDraftService {
       );
     }
 
+    const result = generatedDraftSchema.safeParse(decoded);
+    if (!result.success) {
+      this.logger.warn(
+        'Draft reply did not match the expected story structure',
+      );
+      throw new ServiceUnavailableException(
+        'The story could not be prepared — try again.',
+      );
+    }
+    const parsed = result.data;
+
     let dropped = 0;
-    const chapters: DraftChapter[] = (parsed.chapters ?? [])
-      .map((chapter: any, index: number) => ({
-        title: String(chapter?.title ?? `Chapter ${index + 1}`).trim(),
-        segments: (chapter?.segments ?? [])
-          .map((segment: any) => {
-            const text = String(segment?.text ?? '').trim();
+    const chapters: DraftChapter[] = parsed.chapters
+      .map((chapter, index) => ({
+        title: (chapter.title ?? `Chapter ${index + 1}`).trim(),
+        segments: chapter.segments
+          .map((segment) => {
+            const text = segment.text.trim();
             if (!text) return null;
 
-            const tagged =
-              typeof segment?.narrationText === 'string'
-                ? segment.narrationText.trim()
-                : '';
+            const tagged = segment.narrationText?.trim() ?? '';
 
             // The model is asked to add tags and change nothing else. When it
             // does change something, the performed version is dropped rather
@@ -183,7 +224,7 @@ export class StoryDraftService {
               !tagged || stripNarrationTags(tagged).display === tagged;
             return { text, narrationText: isPlain ? null : tagged };
           })
-          .filter(Boolean) as DraftSegment[],
+          .filter((segment): segment is DraftSegment => segment !== null),
       }))
       .filter((chapter: DraftChapter) => chapter.segments.length > 0);
 
@@ -194,12 +235,12 @@ export class StoryDraftService {
     }
 
     return {
-      title: String(parsed.title ?? fallbackTitle ?? 'Untitled story').trim(),
-      synopsis: String(parsed.synopsis ?? '').trim(),
+      title: (parsed.title ?? fallbackTitle ?? 'Untitled story').trim(),
+      synopsis: (parsed.synopsis ?? '').trim(),
       characters: (parsed.characters ?? [])
-        .map((c: any) => ({
-          name: String(c?.name ?? '').trim(),
-          description: String(c?.description ?? '').trim(),
+        .map((c) => ({
+          name: c.name.trim(),
+          description: (c.description ?? '').trim(),
         }))
         .filter((c: { name: string }) => c.name),
       chapters,

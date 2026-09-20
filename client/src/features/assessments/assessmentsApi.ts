@@ -16,6 +16,7 @@ export interface AssessmentQuestion {
     id: string;
     questionType: "mcq" | "short_answer" | "numeric" | "written";
     prompt: string;
+    promptImageUrl?: string | null;
     difficulty: "easy" | "medium" | "hard" | "extension";
     status: "draft" | "active" | "archived";
     widgetType?: string | null;

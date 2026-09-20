@@ -453,6 +453,121 @@ describe('generateWidgetInstance — v2 configs (already correct; the pattern S3
     });
   });
 
+  it('GRID_MATCHING v2 fixed resolves correctPairs from the validated config, unlike the legacy branch it never needs an UNSUPPORTED fallback', () => {
+    const question = baseQuestion({
+      widgetType: 'GRID_MATCHING',
+      widgetConfig: {
+        configVersion: 2,
+        mode: 'fixed',
+        left: [{ id: 'l1', text: 'Cat' }],
+        right: [{ id: 'r1', text: 'Meow' }],
+        correctPairs: [['l1', 'r1']],
+      },
+    });
+    const result = generateWidgetInstance(question, 1);
+    expect(result.displayConfig).toEqual({
+      left: [{ id: 'l1', text: 'Cat' }],
+      right: [{ id: 'r1', text: 'Meow' }],
+    });
+    expect(result.resolvedAnswer).toEqual({
+      widgetType: 'GRID_MATCHING',
+      correctPairs: [['l1', 'r1']],
+    });
+  });
+
+  it('COORDINATE_PLOTTER v2 fixed resolves correctPoints and tolerance from the validated config', () => {
+    const question = baseQuestion({
+      widgetType: 'COORDINATE_PLOTTER',
+      widgetConfig: {
+        configVersion: 2,
+        mode: 'fixed',
+        xRange: [-5, 5],
+        yRange: [-5, 5],
+        gridStep: 1,
+        correctPoints: [{ x: 2, y: 2 }],
+        tolerance: 0.25,
+      },
+    });
+    const result = generateWidgetInstance(question, 1);
+    expect(result.displayConfig).toEqual({
+      xRange: [-5, 5],
+      yRange: [-5, 5],
+      gridStep: 1,
+    });
+    expect(result.resolvedAnswer).toEqual({
+      widgetType: 'COORDINATE_PLOTTER',
+      correctPoints: [{ x: 2, y: 2 }],
+      tolerance: 0.25,
+    });
+  });
+
+  it('DRAG_AND_DROP_LABELS v2 fixed resolves correctPlacements keyed by target id, stripped from displayConfig', () => {
+    const question = baseQuestion({
+      widgetType: 'DRAG_AND_DROP_LABELS',
+      widgetConfig: {
+        configVersion: 2,
+        mode: 'fixed',
+        labels: ['Fish', 'Bird'],
+        targets: [
+          { id: 'water', placeholder: 'Lives in water', correctLabel: 'Fish' },
+          { id: 'nest', placeholder: 'Lives in a nest', correctLabel: 'Bird' },
+        ],
+      },
+    });
+    const result = generateWidgetInstance(question, 1);
+    expect(result.displayConfig).toEqual({
+      labels: ['Fish', 'Bird'],
+      targets: [
+        { id: 'water', placeholder: 'Lives in water' },
+        { id: 'nest', placeholder: 'Lives in a nest' },
+      ],
+    });
+    expect(result.resolvedAnswer).toEqual({
+      widgetType: 'DRAG_AND_DROP_LABELS',
+      correctPlacements: { water: 'Fish', nest: 'Bird' },
+    });
+  });
+
+  it('ANGLE_PROTRACTOR v2 fixed keeps the answer key out of displayConfig entirely', () => {
+    const question = baseQuestion({
+      widgetType: 'ANGLE_PROTRACTOR',
+      widgetConfig: {
+        configVersion: 2,
+        mode: 'fixed',
+        correctAngle: 45,
+        tolerance: 5,
+        classification: 'acute',
+      },
+    });
+    const result = generateWidgetInstance(question, 1);
+    expect(result.displayConfig).toEqual({});
+    expect(result.resolvedAnswer).toEqual({
+      widgetType: 'ANGLE_PROTRACTOR',
+      correctAngle: 45,
+      tolerance: 5,
+      classification: 'acute',
+    });
+  });
+
+  it('ANGLE_PROTRACTOR v2 fixed defaults classification to null when unset', () => {
+    const question = baseQuestion({
+      widgetType: 'ANGLE_PROTRACTOR',
+      widgetConfig: {
+        configVersion: 2,
+        mode: 'fixed',
+        correctAngle: 120,
+        tolerance: 5,
+      },
+    });
+    const result = generateWidgetInstance(question, 1);
+    expect(result.resolvedAnswer).toEqual({
+      widgetType: 'ANGLE_PROTRACTOR',
+      correctAngle: 120,
+      tolerance: 5,
+      classification: null,
+    });
+  });
+
   it('STANDARD_MCQ parameterized generates options, resolves the correct one, and hides the secret from the prompt', () => {
     const question = baseQuestion({
       widgetType: 'STANDARD_MCQ',

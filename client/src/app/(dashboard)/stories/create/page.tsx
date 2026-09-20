@@ -27,6 +27,7 @@ export default function CreateStoryPage() {
 
   const [source, setSource] = React.useState("");
   const [title, setTitle] = React.useState("");
+  const [topics, setTopics] = React.useState("");
   const [draft, setDraft] = React.useState<StoryDraft | null>(null);
   const [courseId, setCourseId] = React.useState("");
   const [conceptId, setConceptId] = React.useState("");
@@ -83,6 +84,7 @@ export default function CreateStoryPage() {
         ...(moduleItemId ? { moduleItemId } : {}),
         title: title.trim() || draft.title,
         synopsis: draft.synopsis || undefined,
+        topics: [...new Set(topics.split(",").map((topic) => topic.trim()).filter(Boolean))],
         characters: draft.characters.map((c) => ({
           name: c.name,
           description: c.description || undefined,
@@ -137,6 +139,17 @@ export default function CreateStoryPage() {
             placeholder="Title (optional — taken from the story if left blank)"
             className="h-10 rounded-xl text-xs"
           />
+          <Input
+            value={topics}
+            onChange={(e) => setTopics(e.target.value)}
+            placeholder="Topics (comma-separated, optional)"
+            maxLength={500}
+            className="h-10 rounded-xl text-xs"
+            aria-label="Story topics"
+          />
+          <p className="text-[10px] text-muted-foreground">
+            Add topics such as space, friendship, or adventure so families can find this story later.
+          </p>
           <textarea
             value={source}
             onChange={(e) => setSource(e.target.value)}

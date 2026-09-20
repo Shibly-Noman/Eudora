@@ -1,4 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ElevenLabsService, SpeechTimings } from './elevenlabs.service';
 import { GeminiService } from './gemini.service';
 
@@ -53,6 +57,10 @@ export class SpeechService {
     return this.elevenLabs.defaultVoiceId;
   }
 
+  listVoices(search?: string) {
+    return this.elevenLabs.listVoices(search);
+  }
+
   async synthesize(params: {
     text: string;
     voiceId?: string;
@@ -62,12 +70,16 @@ export class SpeechService {
      */
     expressive?: boolean;
   }): Promise<SpeechResult> {
+    if (params.voiceId && !this.elevenLabs.isConfigured)
+      throw new ServiceUnavailableException(
+        'The selected narrator is unavailable. Configure ElevenLabs before generating narration.',
+      );
     if (this.elevenLabs.isConfigured) {
       try {
         const result = await this.elevenLabs.synthesize(params);
         return { ...result, provider: 'elevenlabs' };
       } catch (error) {
-        if (!this.gemini.isConfigured) throw error;
+        if (!this.gemini.isConfigured || params.voiceId) throw error;
         // Deliberately swallowed: the provider already logged why. What
         // matters here is that the downgrade is visible in the log, because
         // the symptom users report is "the voice changed", not "an error".

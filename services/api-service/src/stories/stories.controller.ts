@@ -8,10 +8,14 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Res,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { StoriesService } from './stories.service';
 import type { StoryAccess } from './stories.service';
@@ -43,6 +47,7 @@ import {
   UpdateChapterDto,
   UpdateSegmentDto,
   UpdateStoryDto,
+  UploadArtworkDto,
 } from './dto/story.dto';
 
 /**
@@ -79,8 +84,15 @@ export class StoriesController {
     if (access.status === 'PUBLISHED') return;
 
     if (!access.moduleItemId) {
-      // A draft that belongs to no course has no audience yet. Staff reach it
-      // through the authoring routes, which carry their own role check.
+      // The editor previews through these same media routes. Match its
+      // existing author roles without opening unpublished content to readers.
+      if (
+        user.roles.some((role) =>
+          ['SUPER_ADMIN', 'ADMIN', 'TEACHER'].includes(role),
+        )
+      ) {
+        return;
+      }
       throw new ForbiddenException('This story has not been published');
     }
 
@@ -152,8 +164,8 @@ export class StoriesController {
    * whether or not they own a course. Also before ':id'.
    */
   @Get('library')
-  library() {
-    return this.stories.findPublished();
+  library(@Query('topic') topic?: string) {
+    return this.stories.findPublished(topic);
   }
 
   /**
@@ -172,10 +184,16 @@ export class StoriesController {
   ) {
     const access = await this.stories.accessForStory(id);
     await this.assertCanRead(user, access, actingStudentId);
-    return this.stories.findOne(id);
+    return this.stories.readerStory(id);
   }
 
   /** Staff-only by id, for the authoring screens. */
+  @Get('narrator-voices')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'TEACHER')
+  voices(@Query('search') search?: string) {
+    return this.narration.listVoices(search);
+  }
+
   @Get(':id')
   @Roles('SUPER_ADMIN', 'ADMIN', 'TEACHER')
   findOne(@Param('id') id: string) {
@@ -183,6 +201,59 @@ export class StoriesController {
   }
 
   // ─── Media ────────────────────────────────────────────────────────────────
+
+  @Get('releases/:releaseId/assets/:assetId/file')
+  async releaseArtwork(
+    @Param('releaseId') releaseId: string,
+    @Param('assetId') assetId: string,
+    @CurrentUser() user: CurrentUserDto,
+    @Res() res: Response,
+    @Headers(ACTING_STUDENT_HEADER) actingStudentId?: string,
+  ) {
+    return this.releaseFile(
+      releaseId,
+      assetId,
+      'asset',
+      user,
+      res,
+      actingStudentId,
+    );
+  }
+
+  @Get('releases/:releaseId/segments/:segmentId/narration')
+  async releaseNarration(
+    @Param('releaseId') releaseId: string,
+    @Param('segmentId') segmentId: string,
+    @CurrentUser() user: CurrentUserDto,
+    @Res() res: Response,
+    @Headers(ACTING_STUDENT_HEADER) actingStudentId?: string,
+  ) {
+    return this.releaseFile(
+      releaseId,
+      segmentId,
+      'narration',
+      user,
+      res,
+      actingStudentId,
+    );
+  }
+
+  private async releaseFile(
+    releaseId: string,
+    id: string,
+    kind: 'asset' | 'narration',
+    user: CurrentUserDto,
+    res: Response,
+    actingStudentId?: string,
+  ) {
+    const media = await this.stories.releaseMedia(releaseId, id, kind);
+    await this.assertCanRead(
+      user,
+      await this.stories.accessForStory(media.storyId),
+      actingStudentId,
+    );
+    return this.sendMedia(await this.narration.readMediaKey(media.key), res);
+  }
 
   /**
    * Narration audio. Served through the API rather than handed out as a storage
@@ -203,6 +274,22 @@ export class StoriesController {
   ) {
     const access = await this.stories.accessForSegment(segmentId);
     await this.assertCanRead(user, access, actingStudentId);
+    if (
+      !user.roles.some((role) =>
+        ['SUPER_ADMIN', 'ADMIN', 'TEACHER'].includes(role),
+      )
+    ) {
+      const media = await this.stories.currentMedia(
+        access.id,
+        segmentId,
+        'narration',
+      );
+      if (media)
+        return this.sendMedia(
+          await this.narration.readMediaKey(media.key),
+          res,
+        );
+    }
     return this.sendMedia(await this.narration.readNarration(segmentId), res);
   }
 
@@ -216,6 +303,22 @@ export class StoriesController {
   ) {
     const access = await this.stories.accessForAsset(assetId);
     await this.assertCanRead(user, access, actingStudentId);
+    if (
+      !user.roles.some((role) =>
+        ['SUPER_ADMIN', 'ADMIN', 'TEACHER'].includes(role),
+      )
+    ) {
+      const media = await this.stories.currentMedia(
+        access.id,
+        assetId,
+        'asset',
+      );
+      if (media)
+        return this.sendMedia(
+          await this.narration.readMediaKey(media.key),
+          res,
+        );
+    }
     return this.sendMedia(await this.narration.readAsset(assetId), res);
   }
 
@@ -266,6 +369,7 @@ export class StoriesController {
       demoSessionId: null,
       conversationId: dto.conversationId,
       segmentId: dto.segmentId,
+      releaseId: dto.releaseId,
       text: dto.text,
       audio: dto.audio
         ? {
@@ -438,6 +542,21 @@ export class StoriesController {
   @Roles('SUPER_ADMIN', 'ADMIN', 'TEACHER')
   addAsset(@Param('id') id: string, @Body() dto: CreateAssetDto) {
     return this.stories.addAsset(id, dto);
+  }
+
+  @Post(':id/artwork')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'TEACHER')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+    }),
+  )
+  uploadArtwork(
+    @Param('id') id: string,
+    @Body() dto: UploadArtworkDto,
+    @UploadedFile() file?: { buffer: Buffer },
+  ) {
+    return this.stories.uploadArtwork(id, dto, file);
   }
 
   @Delete('assets/:assetId')

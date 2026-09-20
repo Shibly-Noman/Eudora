@@ -486,6 +486,126 @@ describe('gradeWidgetSubmission', () => {
     });
   });
 
+  describe('ANGLE_PROTRACTOR', () => {
+    const answer: ResolvedAnswer = {
+      widgetType: 'ANGLE_PROTRACTOR',
+      correctAngle: 45,
+      tolerance: 5,
+      classification: null,
+    };
+
+    it('is correct exactly on the angle', () => {
+      expect(
+        gradeWidgetSubmission(answer, { interactionState: { angle: 45 } }),
+      ).toEqual({
+        isCorrect: true,
+        correctReveal: { correctAngle: 45, classification: null },
+      });
+    });
+
+    it('is correct within tolerance', () => {
+      expect(
+        gradeWidgetSubmission(answer, { interactionState: { angle: 49 } }),
+      ).toEqual({
+        isCorrect: true,
+        correctReveal: { correctAngle: 45, classification: null },
+      });
+    });
+
+    it('is incorrect outside tolerance', () => {
+      expect(
+        gradeWidgetSubmission(answer, { interactionState: { angle: 55 } }),
+      ).toEqual({
+        isCorrect: false,
+        correctReveal: { correctAngle: 45, classification: null },
+      });
+    });
+
+    it('is incorrect when no angle was submitted', () => {
+      expect(gradeWidgetSubmission(answer, {})).toEqual({
+        isCorrect: false,
+        correctReveal: { correctAngle: 45, classification: null },
+      });
+    });
+
+    // The exact bug flagged in review: naive Math.abs(measured - correct)
+    // reads 358 vs 1 as 357° apart and wrongly fails a submission that's
+    // actually 3° off around the wrap. Picking the shorter arc is what
+    // makes this pass.
+    it('is correct across the 360°/0° wrap-around', () => {
+      const wrapAnswer: ResolvedAnswer = {
+        widgetType: 'ANGLE_PROTRACTOR',
+        correctAngle: 358,
+        tolerance: 5,
+        classification: null,
+      };
+      expect(
+        gradeWidgetSubmission(wrapAnswer, { interactionState: { angle: 1 } }),
+      ).toEqual({
+        isCorrect: true,
+        correctReveal: { correctAngle: 358, classification: null },
+      });
+    });
+
+    it('is incorrect across the wrap when actually far apart', () => {
+      const wrapAnswer: ResolvedAnswer = {
+        widgetType: 'ANGLE_PROTRACTOR',
+        correctAngle: 358,
+        tolerance: 5,
+        classification: null,
+      };
+      expect(
+        gradeWidgetSubmission(wrapAnswer, {
+          interactionState: { angle: 200 },
+        }),
+      ).toEqual({
+        isCorrect: false,
+        correctReveal: { correctAngle: 358, classification: null },
+      });
+    });
+
+    describe('with a classification requirement', () => {
+      const rightAnswer: ResolvedAnswer = {
+        widgetType: 'ANGLE_PROTRACTOR',
+        correctAngle: 90,
+        tolerance: 5,
+        classification: 'right',
+      };
+
+      it('is correct when both the angle and its classification match', () => {
+        expect(
+          gradeWidgetSubmission(rightAnswer, {
+            interactionState: { angle: 91 },
+          }),
+        ).toEqual({
+          isCorrect: true,
+          correctReveal: { correctAngle: 90, classification: 'right' },
+        });
+      });
+
+      it('is incorrect when within tolerance but the classification no longer matches — drifted into "obtuse"', () => {
+        const obtuseLeaning: ResolvedAnswer = {
+          widgetType: 'ANGLE_PROTRACTOR',
+          correctAngle: 88,
+          tolerance: 3,
+          classification: 'acute',
+        };
+        // 91 is within 3° of 88 (numerically "close enough"), but 91 itself
+        // classifies as right (|91-90|<=3), not acute — the classification
+        // check must still fail this even though the distance check alone
+        // would pass it.
+        expect(
+          gradeWidgetSubmission(obtuseLeaning, {
+            interactionState: { angle: 91 },
+          }),
+        ).toEqual({
+          isCorrect: false,
+          correctReveal: { correctAngle: 88, classification: 'acute' },
+        });
+      });
+    });
+  });
+
   describe('UNSUPPORTED', () => {
     it('returns an empty result — the widget-matrix gap this whole plan is about', () => {
       const answer: ResolvedAnswer = { widgetType: 'UNSUPPORTED' };

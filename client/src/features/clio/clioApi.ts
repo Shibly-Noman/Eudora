@@ -22,6 +22,7 @@ export interface QuestionOption {
 export interface ClioQuestion {
   id: string;
   prompt: string;
+  promptImageUrl: string | null;
   questionType: string;
   widgetType: string | null;
   widgetConfig: Record<string, any> | null;

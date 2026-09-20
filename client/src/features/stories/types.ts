@@ -7,6 +7,8 @@ import type { Timings } from "./narration-timings";
  * which surface it is running on.
  */
 export interface StoryAsset {
+  kind?: "ILLUSTRATION" | "BACKGROUND" | "AUDIO";
+  sortOrder?: number;
   id: string;
   url: string;
   altText: string;
@@ -30,9 +32,14 @@ export interface StoryChapter {
 }
 
 export interface Story {
+  narratorVoiceId?: string | null;
+  releaseId?: string;
+  publication?: { revision: number | null; createdAt: string | null; issues: string[] };
   id: string;
   title: string;
   synopsis: string | null;
+  /** Lowercase browse topics assigned by the author. */
+  topics?: string[];
   /** True when this is the story the public demo serves. */
   isPublicDemo?: boolean;
   /** PUBLISHED means it is in the student-facing library. */
@@ -59,6 +66,7 @@ export interface AgentReply {
 
 /** Everything a question needs, minus who is asking — the caller supplies that. */
 export interface AskPayload {
+  releaseId?: string;
   text?: string;
   audio?: string;
   audioMimeType?: string;
@@ -72,6 +80,7 @@ export interface StorySummary {
   id: string;
   title: string;
   synopsis: string | null;
+  topics?: string[];
   gradeBand: string | null;
   isPublicDemo: boolean;
   updatedAt: string;
@@ -105,6 +114,7 @@ export interface StoryLibraryItem {
   id: string;
   title: string;
   synopsis: string | null;
+  topics?: string[];
   gradeBand: string | null;
   coverUrl: string | null;
   pageCount: number;

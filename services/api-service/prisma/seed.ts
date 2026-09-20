@@ -322,10 +322,10 @@ async function main() {
   await prisma.assessmentType.upsert({ where: { code: 'DIAGNOSTIC' }, update: {}, create: { code: 'DIAGNOSTIC', name: 'Diagnostic Assessment' } });
 
   // Questions for assessments
-  const makeQ = async (subjectId: string, classId: string, prompt: string, options: { label: string; text: string; correct: boolean }[], explanation: string) => {
+  const makeQ = async (subjectId: string, classId: string, prompt: string, options: { label: string; text: string; correct: boolean }[], explanation: string, promptImageUrl?: string) => {
     const existing = await prisma.question.findFirst({ where: { prompt } });
     if (existing) return existing;
-    const q = await prisma.question.create({ data: { subjectId, classId, questionType: 'mcq', prompt, widgetType: 'STANDARD_MCQ', isGraded: true, explanation, hints: [] } });
+    const q = await prisma.question.create({ data: { subjectId, classId, questionType: 'mcq', prompt, promptImageUrl: promptImageUrl ?? null, widgetType: 'STANDARD_MCQ', isGraded: true, explanation, hints: [] } });
     for (const o of options) {
       await prisma.questionOption.create({ data: { questionId: q.id, optionLabel: o.label, optionText: o.text, isCorrect: o.correct } });
     }
@@ -2615,6 +2615,107 @@ async function main() {
       },
     });
     await prisma.card.create({ data: { lessonId: hexLesson.id, title: 'Shade the Hexagon', sortOrder: 2, cardType: 'INTERACTIVE', content: 'Tap wedges to color them in.', questionId: hexQ.id } });
+  }
+
+  const anglesChapter = await prisma.concept.upsert({
+    where: { name: 'Measuring Angles' },
+    update: { courseId: widgetDemoCourse.id, sortOrder: 3, kind: 'CHAPTER' },
+    create: { name: 'Measuring Angles', description: 'Drag a ray to set an angle in degrees.', courseId: widgetDemoCourse.id, sortOrder: 3, kind: 'CHAPTER' },
+  });
+
+  let acuteAngleLesson = await prisma.lesson.findFirst({ where: { title: 'Set an Acute Angle', conceptId: anglesChapter.id } });
+  if (!acuteAngleLesson) {
+    acuteAngleLesson = await prisma.lesson.create({ data: { conceptId: anglesChapter.id, title: 'Set an Acute Angle', description: 'Drag a ray from the baseline to make a target angle.', sortOrder: 1, xpReward: 25 } });
+    await prisma.card.create({ data: { lessonId: acuteAngleLesson.id, title: 'What Is an Angle?', sortOrder: 1, cardType: 'CONCEPTUAL', content: 'An angle is formed where two rays meet at a shared point, called the vertex. Angles are measured in degrees — a full turn is 360°, and an angle smaller than 90° is called acute.' } });
+    const angleQ = await prisma.question.create({
+      data: {
+        subjectId: mathSubject.id,
+        classId: g3Level.id,
+        questionType: 'short_answer',
+        prompt: 'Drag the ray to make a 60° angle from the baseline.',
+        correctAnswer: null,
+        widgetType: 'ANGLE_PROTRACTOR',
+        isGraded: true,
+        explanation: 'The ray needs to sweep 60° counter-clockwise from the fixed baseline ray — a bit more than half of a right angle.',
+        hints: ['A right angle is 90° — 60° is a little less than that.'],
+        widgetConfig: {
+          configVersion: 2,
+          mode: 'fixed',
+          correctAngle: 60,
+          tolerance: 5,
+          classification: 'acute',
+        },
+      },
+    });
+    await prisma.card.create({ data: { lessonId: acuteAngleLesson.id, title: 'Set the Angle', sortOrder: 2, cardType: 'INTERACTIVE', content: 'Drag the slider or type a value to set the angle.', questionId: angleQ.id } });
+  }
+
+  const dragDropChapter = await prisma.concept.upsert({
+    where: { name: 'Matching by Dragging' },
+    update: { courseId: widgetDemoCourse.id, sortOrder: 4, kind: 'CHAPTER' },
+    create: { name: 'Matching by Dragging', description: 'Drag a label from the pool onto the slot where it belongs.', courseId: widgetDemoCourse.id, sortOrder: 4, kind: 'CHAPTER' },
+  });
+
+  let animalHomesLesson = await prisma.lesson.findFirst({ where: { title: 'Animal Homes', conceptId: dragDropChapter.id } });
+  if (!animalHomesLesson) {
+    animalHomesLesson = await prisma.lesson.create({ data: { conceptId: dragDropChapter.id, title: 'Animal Homes', description: 'Drag each animal to where it lives.', sortOrder: 1, xpReward: 20 } });
+    await prisma.card.create({ data: { lessonId: animalHomesLesson.id, title: 'Every Animal Has a Home', sortOrder: 1, cardType: 'CONCEPTUAL', content: 'Different animals live in different places. Fish live in water, and birds build nests.' } });
+    const dragDropQ = await prisma.question.create({
+      data: {
+        subjectId: sciSubject.id,
+        classId: gradeLevel.id,
+        questionType: 'short_answer',
+        prompt: 'Drag each animal to its correct home.',
+        correctAnswer: null,
+        widgetType: 'DRAG_AND_DROP_LABELS',
+        isGraded: true,
+        explanation: 'A fish breathes through gills and lives in water. A bird builds a nest to lay its eggs.',
+        hints: ['Think about which animal needs to breathe underwater.'],
+        widgetConfig: {
+          configVersion: 2,
+          mode: 'fixed',
+          labels: ['Fish', 'Bird'],
+          targets: [
+            { id: 'water', placeholder: 'Lives in water', correctLabel: 'Fish' },
+            { id: 'nest', placeholder: 'Lives in a nest', correctLabel: 'Bird' },
+          ],
+        },
+      },
+    });
+    await prisma.card.create({ data: { lessonId: animalHomesLesson.id, title: 'Drag Each Animal Home', sortOrder: 2, cardType: 'INTERACTIVE', content: 'Drag or tap items below to match.', questionId: dragDropQ.id } });
+  }
+
+  const picturesChapter = await prisma.concept.upsert({
+    where: { name: 'Shapes with Pictures' },
+    update: { courseId: widgetDemoCourse.id, sortOrder: 5, kind: 'CHAPTER' },
+    create: { name: 'Shapes with Pictures', description: 'Questions with a picture in the prompt, not just text.', courseId: widgetDemoCourse.id, sortOrder: 5, kind: 'CHAPTER' },
+  });
+
+  let namePolygonLesson = await prisma.lesson.findFirst({ where: { title: 'Name the Polygon', conceptId: picturesChapter.id } });
+  if (!namePolygonLesson) {
+    namePolygonLesson = await prisma.lesson.create({ data: { conceptId: picturesChapter.id, title: 'Name the Polygon', description: 'Look at a shape and answer a question about it.', sortOrder: 1, xpReward: 20 } });
+    await prisma.card.create({ data: { lessonId: namePolygonLesson.id, title: 'Polygons Have Names', sortOrder: 1, cardType: 'CONCEPTUAL', content: 'A polygon is a flat shape with straight sides. Its name comes from how many sides it has — a hexagon has six.' } });
+    // A self-contained SVG data URI rather than an uploaded file: seed data
+    // has no running upload pipeline behind it (the seed script and the API
+    // container don't share a filesystem for LocalStorageService's uploads/
+    // directory), and a data: URI needs nothing from either — it renders the
+    // same way a real uploaded image would (see resolveUploadUrl on both
+    // clients), which is the one thing this lesson exists to demonstrate.
+    const hexagonImage =
+      'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjAwIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2Y4ZmFmYyIvPjxwb2x5Z29uIHBvaW50cz0iMTAwLDIyIDE2Ny41NSw2MSAxNjcuNTUsMTM5IDEwMCwxNzggMzIuNDUsMTM5IDMyLjQ1LDYxIiBmaWxsPSIjYmZkYmZlIiBzdHJva2U9IiMxZDRlZDgiIHN0cm9rZS13aWR0aD0iNCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==';
+    const polygonQ = await makeQ(
+      mathSubject.id,
+      g3Level.id,
+      'How many sides does this polygon have?',
+      [
+        { label: 'A', text: '5', correct: false },
+        { label: 'B', text: '6', correct: true },
+        { label: 'C', text: '7', correct: false },
+      ],
+      'Count each straight edge going around the shape once — this one has six, so it is a hexagon.',
+      hexagonImage,
+    );
+    await prisma.card.create({ data: { lessonId: namePolygonLesson.id, title: 'Count the Sides', sortOrder: 2, cardType: 'INTERACTIVE', content: 'Look at the shape above, then pick your answer.', questionId: polygonQ.id } });
   }
 
   console.log('✅ Seeded new-widget-types demo course');

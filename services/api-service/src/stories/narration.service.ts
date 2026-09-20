@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SpeechService } from '../ai/speech.service';
 import { UploadsService } from '../uploads/uploads.service';
@@ -88,10 +90,7 @@ export class NarrationService {
         continue;
       }
       try {
-        const result = await this.narrateSegment(
-          segment.id,
-          story.narratorVoiceId ?? undefined,
-        );
+        const result = await this.narrateSegment(segment.id);
         provider = result.provider;
         generated++;
       } catch (error) {
@@ -111,7 +110,6 @@ export class NarrationService {
   /** Narrates one segment, replacing any audio it already had. */
   async narrateSegment(
     segmentId: string,
-    voiceIdOverride?: string,
   ): Promise<{ durationMs: number; provider: string }> {
     const segment = await this.prisma.storySegment.findUnique({
       where: { id: segmentId },
@@ -141,8 +139,7 @@ export class NarrationService {
       );
     }
 
-    const voiceId =
-      voiceIdOverride ?? segment.chapter.story.narratorVoiceId ?? undefined;
+    const voiceId = segment.chapter.story.narratorVoiceId ?? undefined;
 
     const spoken = await this.speech.synthesize({
       text: tagged ?? text,
@@ -176,24 +173,41 @@ export class NarrationService {
     // nothing else will ever reference it.
     const previousKey = segment.narrationAudioKey;
 
-    await this.prisma.storySegment.update({
-      where: { id: segmentId },
+    // Compare the generation input and previous recording in the write itself.
+    // A separate re-read would still allow an edit between checking and saving.
+    const saved = await this.prisma.storySegment.updateMany({
+      where: {
+        id: segmentId,
+        updatedAt: segment.updatedAt,
+        text: segment.text,
+        narrationText: segment.narrationText,
+        narrationAudioKey: previousKey,
+        chapter: {
+          story: { narratorVoiceId: segment.chapter.story.narratorVoiceId },
+        },
+      },
       data: {
         narrationAudioKey: stored.key,
         narrationDurationMs: spoken.durationMs,
-        narrationTimings: (timings ?? undefined) as any,
+        narrationTimings: timings ? { ...timings } : Prisma.DbNull,
       },
     });
 
-    if (previousKey && previousKey !== stored.key) {
+    if (saved.count === 0) {
       await this.storage
-        .deleteFile(previousKey)
+        .deleteFile(stored.key, stored.bucket)
         .catch((error) =>
           this.logger.warn(
-            `Could not remove replaced narration ${previousKey}: ${error?.message}`,
+            `Could not remove discarded narration ${stored.key}: ${error?.message}`,
           ),
         );
+      throw new ConflictException(
+        'This section changed while narration was being generated. Refresh and try again.',
+      );
     }
+
+    // Published editions and concurrent publication can reference previousKey.
+    // Retain superseded recordings until release-aware garbage collection.
 
     return { durationMs: spoken.durationMs, provider: spoken.provider };
   }
@@ -229,6 +243,17 @@ export class NarrationService {
       asset.storageKey,
       NarrationService.mimeOf(asset.storageKey, asset.kind),
     );
+  }
+
+  readMediaKey(key: string) {
+    return this.uploads.readPrivateByKey(
+      key,
+      NarrationService.mimeOf(key, 'ILLUSTRATION'),
+    );
+  }
+
+  listVoices(search?: string) {
+    return this.speech.listVoices(search);
   }
 
   /**

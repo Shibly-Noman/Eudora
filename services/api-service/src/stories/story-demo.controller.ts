@@ -54,24 +54,35 @@ export class StoryDemoController {
     }
     // Media URLs must point at this controller's own public routes, not the
     // authenticated ones, or every play button 401s for a visitor.
-    return this.stories.findOne(storyId, '/api/stories/demo');
+    return this.stories.readerStory(storyId, '/api/stories/demo');
   }
 
-  @Get('segments/:segmentId/narration')
-  @Throttle({ default: { ttl: 60_000, limit: 120 } })
+  @Get('releases/:releaseId/segments/:segmentId/narration')
   async narrationAudio(
+    @Param('releaseId') releaseId: string,
     @Param('segmentId') segmentId: string,
     @Res() res: Response,
   ) {
-    await this.demo.assertSegmentIsDemo(segmentId);
-    return this.send(await this.narration.readNarration(segmentId), res);
+    return this.releaseFile(releaseId, segmentId, 'narration', res);
   }
-
-  @Get('assets/:assetId/file')
-  @Throttle({ default: { ttl: 60_000, limit: 120 } })
-  async assetFile(@Param('assetId') assetId: string, @Res() res: Response) {
-    await this.demo.assertAssetIsDemo(assetId);
-    return this.send(await this.narration.readAsset(assetId), res);
+  @Get('releases/:releaseId/assets/:assetId/file')
+  async assetFile(
+    @Param('releaseId') releaseId: string,
+    @Param('assetId') assetId: string,
+    @Res() res: Response,
+  ) {
+    return this.releaseFile(releaseId, assetId, 'asset', res);
+  }
+  private async releaseFile(
+    releaseId: string,
+    id: string,
+    kind: 'asset' | 'narration',
+    res: Response,
+  ) {
+    const media = await this.stories.releaseMedia(releaseId, id, kind);
+    if (media.storyId !== (await this.demo.currentStoryId()))
+      throw new NotFoundException('Demo media not found');
+    return this.send(await this.narration.readMediaKey(media.key), res);
   }
 
   /**
@@ -93,6 +104,7 @@ export class StoryDemoController {
       demoSessionId: dto.demoSessionId,
       conversationId: dto.conversationId,
       segmentId: dto.segmentId,
+      releaseId: dto.releaseId,
       text: dto.text,
       audio: dto.audio
         ? {

@@ -96,6 +96,42 @@ export class ElevenLabsService {
     return DEFAULT_VOICE_ID;
   }
 
+  async listVoices(search = '') {
+    if (search.length > 100)
+      throw new ServiceUnavailableException('Use a shorter voice search.');
+    const key = this.requireKey();
+    try {
+      const response = await fetch(
+        `https://api.elevenlabs.io/v2/voices?page_size=100&search=${encodeURIComponent(search)}`,
+        {
+          headers: { 'xi-api-key': key },
+          signal: AbortSignal.timeout(15_000),
+        },
+      );
+      if (!response.ok) throw new Error('Voice list unavailable');
+      const data = (await response.json()) as {
+        voices: { voice_id: string; name: string; preview_url?: string }[];
+        has_more?: boolean;
+      };
+      if (!Array.isArray(data.voices)) throw new Error('Invalid voice list');
+      return {
+        defaultVoiceId: DEFAULT_VOICE_ID,
+        hasMore: Boolean(data.has_more),
+        voices: data.voices.map((v) => ({
+          id: v.voice_id,
+          name: v.name,
+          previewUrl: v.preview_url?.startsWith('https://')
+            ? v.preview_url
+            : null,
+        })),
+      };
+    } catch {
+      throw new ServiceUnavailableException(
+        'Narrator voices could not be loaded. Please retry.',
+      );
+    }
+  }
+
   /**
    * Uses the `/with-timestamps` variant even though the plain endpoint is
    * simpler, because the alignment it returns is not recoverable later: it is

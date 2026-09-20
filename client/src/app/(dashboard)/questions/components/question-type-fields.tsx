@@ -1,11 +1,14 @@
 ﻿"use client";
 
+import { arrayMove } from "@dnd-kit/sortable";
 import { Plus, Trash2 } from "lucide-react";
 import React from "react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+import { DragHandle, SortableListContext, SortableRow } from "./sortable-list";
 
 interface QuestionOption {
   id?: string;
@@ -66,6 +69,19 @@ export function QuestionTypeFields({
       onOptionsChange(relabeled);
     };
 
+    // Labels are positional (A, B, C...), not attached to a specific option,
+    // so a pure array move without relabeling would leave option A's text
+    // sitting under label C after a drag — relabel in the same update as the
+    // move so a row's letter always matches where it now sits.
+    const handleReorderOptions = (fromIndex: number, toIndex: number) => {
+      const moved = arrayMove(options, fromIndex, toIndex);
+      const relabeled = moved.map((opt, i) => ({
+        ...opt,
+        optionLabel: String.fromCharCode(65 + i),
+      }));
+      onOptionsChange(relabeled);
+    };
+
     return (
       <div className="space-y-3 rounded-2xl border border-border bg-card p-5 shadow-sm/40">
         <div className="flex items-center justify-between">
@@ -81,52 +97,63 @@ export function QuestionTypeFields({
           </button>
         </div>
 
-        <div className="space-y-3">
-          {options.map((opt, idx) => (
-            <div key={idx} className="flex items-center gap-3">
-              {/* Option Label Indicator */}
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-xs font-bold text-muted-foreground">
-                {opt.optionLabel}
-              </span>
+        <SortableListContext
+          ids={options.map((_, idx) => `option-${idx}`)}
+          onReorder={handleReorderOptions}
+        >
+          <div className="space-y-3">
+            {options.map((opt, idx) => (
+              <SortableRow key={idx} id={`option-${idx}`} className="flex items-center gap-3">
+                {(handle) => (
+                  <>
+                    <DragHandle {...handle} className="flex h-9 w-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing" />
 
-              {/* Option Text Input */}
-              <Input
-                type="text"
-                placeholder={`Option ${opt.optionLabel} text...`}
-                value={opt.optionText}
-                onChange={(e) => handleUpdateOption(idx, "optionText", e.target.value)}
-                className="h-10 rounded-xl text-xs flex-1 border-border"
-              />
+                    {/* Option Label Indicator */}
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-xs font-bold text-muted-foreground">
+                      {opt.optionLabel}
+                    </span>
 
-              {/* Is Correct Checkbox */}
-              <div className="flex items-center gap-2 border border-border bg-muted/50 rounded-xl px-3 h-10 select-none">
-                <Checkbox
-                  id={`iscorrect-${idx}`}
-                  checked={opt.isCorrect}
-                  onCheckedChange={(checked) => handleUpdateOption(idx, "isCorrect", !!checked)}
-                  className="rounded-md border-border"
-                />
-                <label
-                  htmlFor={`iscorrect-${idx}`}
-                  className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground cursor-pointer"
-                >
-                  Correct
-                </label>
-              </div>
+                    {/* Option Text Input */}
+                    <Input
+                      type="text"
+                      placeholder={`Option ${opt.optionLabel} text...`}
+                      value={opt.optionText}
+                      onChange={(e) => handleUpdateOption(idx, "optionText", e.target.value)}
+                      className="h-10 rounded-xl text-xs flex-1 border-border"
+                    />
 
-              {/* Delete Button */}
-              {options.length > 2 && (
-                <button
-                  type="button"
-                  onClick={() => handleRemoveOption(idx)}
-                  className="rounded-xl border border-border bg-card p-2.5 text-muted-foreground hover:bg-muted hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+                    {/* Is Correct Checkbox */}
+                    <div className="flex items-center gap-2 border border-border bg-muted/50 rounded-xl px-3 h-10 select-none">
+                      <Checkbox
+                        id={`iscorrect-${idx}`}
+                        checked={opt.isCorrect}
+                        onCheckedChange={(checked) => handleUpdateOption(idx, "isCorrect", !!checked)}
+                        className="rounded-md border-border"
+                      />
+                      <label
+                        htmlFor={`iscorrect-${idx}`}
+                        className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground cursor-pointer"
+                      >
+                        Correct
+                      </label>
+                    </div>
+
+                    {/* Delete Button */}
+                    {options.length > 2 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveOption(idx)}
+                        className="rounded-xl border border-border bg-card p-2.5 text-muted-foreground hover:bg-muted hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </>
+                )}
+              </SortableRow>
+            ))}
+          </div>
+        </SortableListContext>
       </div>
     );
   }

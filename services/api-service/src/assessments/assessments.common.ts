@@ -60,6 +60,7 @@ export const assessmentSelect = {
           id: true,
           questionType: true,
           prompt: true,
+          promptImageUrl: true,
           difficulty: true,
           status: true,
           widgetType: true,
@@ -91,6 +92,7 @@ export const questionSelect = {
   class: { select: { id: true, code: true, name: true } },
   questionType: true,
   prompt: true,
+  promptImageUrl: true,
   correctAnswer: true,
   difficulty: true,
   status: true,
@@ -156,6 +158,7 @@ export const attemptQuestionsSelect = {
       id: true,
       questionType: true,
       prompt: true,
+      promptImageUrl: true,
       correctAnswer: true,
       widgetType: true,
       widgetConfig: true,
@@ -182,6 +185,7 @@ type RawAttemptQuestion = {
   question: Parameters<typeof generateWidgetInstance>[0] & {
     id: string;
     prompt: string;
+    promptImageUrl: string | null;
     hints: string[];
   };
 };
@@ -213,6 +217,7 @@ export function toStudentSafeAttemptQuestions(
         id: aq.question.id,
         questionType: aq.question.questionType,
         prompt: aq.question.prompt,
+        promptImageUrl: aq.question.promptImageUrl,
         widgetType: aq.question.widgetType,
         widgetConfig: instance.displayConfig,
         hints: aq.question.hints,
@@ -278,7 +283,13 @@ export const responseSelect = {
   createdAt: true,
   updatedAt: true,
   question: {
-    select: { id: true, questionType: true, prompt: true, difficulty: true },
+    select: {
+      id: true,
+      questionType: true,
+      prompt: true,
+      promptImageUrl: true,
+      difficulty: true,
+    },
   },
   selectedOption: { select: { id: true, optionLabel: true, optionText: true } },
 };

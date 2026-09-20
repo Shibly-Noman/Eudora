@@ -5,6 +5,7 @@ import React, { useEffect,useState } from "react";
 import { MathRenderer } from "@/components/MathRenderer";
 import type { Question } from "@/features/assessments/questionsApi";
 import { WidgetSelector } from "@/features/clio/widgets/WidgetSelector";
+import { resolveUploadUrl } from "@/lib/uploads";
 
 interface QuestionPreviewProps {
   question: Partial<Question>;
@@ -51,6 +52,17 @@ export function QuestionPreview({ question }: QuestionPreviewProps) {
           Prompt
         </h4>
         <MathRenderer text={question.prompt || "No prompt entered."} className="font-medium" />
+        {question.promptImageUrl && (
+          // Plain <img>, same as story-reader.tsx: prompt images come from
+          // arbitrary upload-provider origins, so next/image's remote-domain
+          // allowlist would need a new entry per provider.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={resolveUploadUrl(question.promptImageUrl) || undefined}
+            alt="Question prompt"
+            className="mt-3 max-h-64 w-full rounded-xl border border-border object-contain"
+          />
+        )}
       </div>
 
       {/* Widget Render */}
@@ -63,6 +75,7 @@ export function QuestionPreview({ question }: QuestionPreviewProps) {
             question={{
               id: question.id || "preview-id",
               prompt: question.prompt || "",
+              promptImageUrl: question.promptImageUrl || null,
               questionType: question.questionType || "mcq",
               widgetType: question.widgetType,
               widgetConfig: question.widgetConfig || null,

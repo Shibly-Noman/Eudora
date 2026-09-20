@@ -8,6 +8,10 @@ describe('StoriesService', () => {
   let service: StoriesService;
 
   const mockPrisma: any = {
+    storyRelease: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      create: jest.fn(),
+    },
     moduleItem: { findUnique: jest.fn(), delete: jest.fn() },
     story: {
       create: jest.fn(),
@@ -44,6 +48,8 @@ describe('StoriesService', () => {
   /** Minimal shape `findOne` needs so the read-back after a write resolves. */
   const emptyStory = {
     id: 'story-1',
+    title: 'A story',
+    status: 'PUBLISHED',
     cover: null,
     assets: [],
     chapters: [],
@@ -77,6 +83,21 @@ describe('StoriesService', () => {
       expect(mockPrisma.story.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ moduleItemId: null }),
+        }),
+      );
+    });
+
+    it('normalizes and deduplicates browse topics when creating a story', async () => {
+      mockPrisma.story.create.mockResolvedValue({ id: 'story-1' });
+
+      await service.create({
+        title: 'A Story',
+        topics: [' Space ', 'space', '  Friendship  '],
+      });
+
+      expect(mockPrisma.story.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ topics: ['space', 'friendship'] }),
         }),
       );
     });
@@ -305,7 +326,7 @@ describe('StoriesService', () => {
     });
 
     it('attaches to a free STORY slot', async () => {
-      mockPrisma.story.findUnique.mockResolvedValue({ id: 'story-1' });
+      mockPrisma.story.findUnique.mockResolvedValue({ ...emptyStory });
       mockPrisma.moduleItem.findUnique.mockResolvedValue({
         id: 'mi-1',
         kind: 'STORY',
@@ -321,7 +342,7 @@ describe('StoriesService', () => {
     });
 
     it('refuses a slot another story already fills', async () => {
-      mockPrisma.story.findUnique.mockResolvedValue({ id: 'story-1' });
+      mockPrisma.story.findUnique.mockResolvedValue({ ...emptyStory });
       mockPrisma.moduleItem.findUnique.mockResolvedValue({
         id: 'mi-1',
         kind: 'STORY',
@@ -335,7 +356,7 @@ describe('StoriesService', () => {
     });
 
     it('lets a story re-attach to the slot it already occupies', async () => {
-      mockPrisma.story.findUnique.mockResolvedValue({ id: 'story-1' });
+      mockPrisma.story.findUnique.mockResolvedValue({ ...emptyStory });
       mockPrisma.moduleItem.findUnique.mockResolvedValue({
         id: 'mi-1',
         kind: 'STORY',
@@ -496,8 +517,8 @@ describe('StoriesService', () => {
     });
   });
 
-  describe('discarding orphaned audio', () => {
-    it('removes a deleted section’s recording', async () => {
+  describe('retaining edition media', () => {
+    it('retains a deleted section’s recording for published editions', async () => {
       mockPrisma.storySegment.findUnique.mockResolvedValue({
         id: 'seg-1',
         chapterId: 'ch-1',
@@ -510,12 +531,10 @@ describe('StoriesService', () => {
       await service.removeSegment('seg-1');
 
       // Nothing points at the file once the row is gone, and it was paid for.
-      expect(mockStorage.deleteFile).toHaveBeenCalledWith(
-        'story-narration/one.mp3',
-      );
+      expect(mockStorage.deleteFile).not.toHaveBeenCalled();
     });
 
-    it('removes the recordings a deleted chapter takes with it', async () => {
+    it('retains recordings when deleting a draft chapter', async () => {
       mockPrisma.storyChapter.findUnique.mockResolvedValue({
         id: 'ch-1',
         storyId: 'story-1',
@@ -531,10 +550,7 @@ describe('StoriesService', () => {
 
       // Collected before the delete: the cascade takes the segments with the
       // chapter, and afterwards nothing remembers which files they used.
-      expect(mockStorage.deleteFile.mock.calls.map((c: any) => c[0])).toEqual([
-        'story-narration/a.mp3',
-        'story-narration/b.mp3',
-      ]);
+      expect(mockStorage.deleteFile).not.toHaveBeenCalled();
     });
 
     it('still deletes the rows when the file cannot be removed', async () => {
@@ -555,7 +571,7 @@ describe('StoriesService', () => {
 
   describe('setPublicDemo', () => {
     beforeEach(() => {
-      mockPrisma.story.findUnique.mockResolvedValue({ id: 'story-1' });
+      mockPrisma.story.findUnique.mockResolvedValue({ ...emptyStory });
       mockPrisma.story.update.mockResolvedValue({});
       mockPrisma.story.updateMany.mockResolvedValue({ count: 1 });
     });
@@ -587,49 +603,69 @@ describe('StoriesService', () => {
   });
 
   describe('findPublished', () => {
-    it('lists only published stories that are fully narrated', async () => {
+    it('uses the published edition even when the draft is incomplete', async () => {
       mockPrisma.story.findMany.mockResolvedValue([
         {
           id: 'done',
-          title: 'Finished',
-          synopsis: null,
-          gradeBand: null,
-          cover: { id: 'cov-1' },
-          chapters: [
+          title: 'Unfinished edit',
+          releases: [
             {
-              segments: [
-                { narrationAudioKey: 'a' },
-                { narrationAudioKey: 'b' },
-              ],
+              id: 'release-1',
+              snapshot: {
+                ...emptyStory,
+                title: 'Finished',
+                cover: { id: 'cov-1' },
+                chapters: [{ segments: [{ narrationAudioKey: 'a' }] }],
+              },
+            },
+          ],
+        },
+        { id: 'never-published', releases: [] },
+      ]);
+      const library = await service.findPublished();
+      expect(library.map((s) => s.id)).toEqual(['done']);
+      expect(library[0].title).toBe('Finished');
+      expect(library[0].coverUrl).toBe(
+        '/api/stories/releases/release-1/assets/cov-1/file',
+      );
+    });
+
+    it('filters by a normalized topic from the released edition', async () => {
+      mockPrisma.story.findMany.mockResolvedValue([
+        {
+          id: 'space-story',
+          releases: [
+            {
+              id: 'release-space',
+              snapshot: {
+                ...emptyStory,
+                id: 'space-story',
+                topics: ['space', 'friendship'],
+                chapters: [{ segments: [{ narrationAudioKey: 'a' }] }],
+              },
             },
           ],
         },
         {
-          id: 'half',
-          title: 'Half narrated',
-          synopsis: null,
-          gradeBand: null,
-          cover: null,
-          chapters: [
+          id: 'garden-story',
+          releases: [
             {
-              segments: [
-                { narrationAudioKey: 'a' },
-                { narrationAudioKey: null },
-              ],
+              id: 'release-garden',
+              snapshot: {
+                ...emptyStory,
+                id: 'garden-story',
+                topics: ['nature'],
+                chapters: [{ segments: [{ narrationAudioKey: 'b' }] }],
+              },
             },
           ],
         },
       ]);
 
-      const library = await service.findPublished();
+      const library = await service.findPublished(' SPACE ');
 
-      // A published story with missing audio is a page of text where a child
-      // expected a voice.
-      expect(library.map((s) => s.id)).toEqual(['done']);
-      expect(mockPrisma.story.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { status: 'PUBLISHED' } }),
-      );
-      expect(library[0].coverUrl).toBe('/api/stories/assets/cov-1/file');
+      expect(library.map((story) => story.id)).toEqual(['space-story']);
+      expect(library[0].topics).toEqual(['space', 'friendship']);
     });
   });
 
@@ -644,10 +680,18 @@ describe('StoriesService', () => {
           segments: [
             {
               id: 's1',
+              text: 'A page',
               narrationAudioKey: 'story-narration/s1.mp3',
-              assets: [{ id: 'a2', storageKey: 'art/two.png' }],
+              assets: [
+                { id: 'a2', storageKey: 'art/two.png', altText: 'Artwork' },
+              ],
             },
-            { id: 's2', narrationAudioKey: null, assets: [] },
+            {
+              id: 's2',
+              text: 'Another page',
+              narrationAudioKey: null,
+              assets: [],
+            },
           ],
         },
       ],

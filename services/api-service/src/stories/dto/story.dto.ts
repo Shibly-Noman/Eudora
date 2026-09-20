@@ -1,9 +1,12 @@
 import { plainToInstance, Transform, Type } from 'class-transformer';
 import {
   IsArray,
+  ArrayMaxSize,
+  ArrayUnique,
   IsBoolean,
   IsEnum,
   IsInt,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -55,6 +58,14 @@ export class CreateStoryDto {
   @IsOptional()
   gradeBand?: GradeBand;
 
+  @IsArray()
+  @ArrayMaxSize(8)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(60, { each: true })
+  @IsOptional()
+  topics?: string[];
+
   @IsString()
   @IsOptional()
   @MaxLength(4000)
@@ -62,6 +73,11 @@ export class CreateStoryDto {
 }
 
 export class UpdateStoryDto {
+  @IsString()
+  @IsOptional()
+  @MaxLength(100)
+  narratorVoiceId?: string | null;
+
   @IsString()
   @IsOptional()
   @MaxLength(200)
@@ -75,6 +91,14 @@ export class UpdateStoryDto {
   @IsEnum(GradeBand)
   @IsOptional()
   gradeBand?: GradeBand;
+
+  @IsArray()
+  @ArrayMaxSize(8)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(60, { each: true })
+  @IsOptional()
+  topics?: string[];
 
   @IsString()
   @IsOptional()
@@ -190,6 +214,23 @@ export class CreateAssetDto {
   sortOrder?: number;
 }
 
+export class UploadArtworkDto {
+  @IsIn(['COVER', 'SECTION'])
+  purpose: 'COVER' | 'SECTION';
+
+  @IsUUID()
+  @IsOptional()
+  segmentId?: string;
+
+  @IsIn(['ILLUSTRATION', 'BACKGROUND'])
+  kind: 'ILLUSTRATION' | 'BACKGROUND';
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(300)
+  altText: string;
+}
+
 export class CreateCharacterDto {
   @IsString()
   @IsNotEmpty()
@@ -269,6 +310,14 @@ export class ImportStoryDto {
   @IsEnum(GradeBand)
   @IsOptional()
   gradeBand?: GradeBand;
+
+  @IsArray()
+  @ArrayMaxSize(8)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(60, { each: true })
+  @IsOptional()
+  topics?: string[];
 
   @IsString()
   @IsOptional()

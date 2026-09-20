@@ -31,6 +31,7 @@ import {
   useSubmitAttemptMutation} from "@/features/assessments/assessmentsApi";
 import { useGetAssessmentQuery } from "@/features/assessments/assessmentsApi";
 import { WidgetSelector } from "@/features/clio/widgets/WidgetSelector";
+import { resolveUploadUrl } from "@/lib/uploads";
 
 export default function StudentAssessmentPlayerPage() {
   const router = useRouter();
@@ -492,6 +493,14 @@ export default function StudentAssessmentPlayerPage() {
               <div className="text-sm font-medium leading-relaxed text-foreground select-text">
                 <MathRenderer text={currentQuestion.question.prompt} />
               </div>
+              {currentQuestion.question.promptImageUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={resolveUploadUrl(currentQuestion.question.promptImageUrl) || undefined}
+                  alt="Question prompt"
+                  className="max-h-72 w-full rounded-2xl border border-border object-contain"
+                />
+              )}
 
               {/* Interaction Panel */}
               <div className="pt-4">

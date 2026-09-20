@@ -27,26 +27,26 @@ model User {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  roles                   UserRole[]
-  identities              UserIdentity[]
-  studentProfile          StudentProfile?
-  guardianProfile         GuardianProfile?
-  teacherProfile          TeacherProfile?
-  authSessions            AuthSession[]
-  assignedAssignments     AssessmentAssignment[] @relation("AssignedAssignments")
-  markedAttempts          AssessmentAttempt[]    @relation("MarkedAttempts")
-  notifications           Notification[]
-  deviceTokens            DeviceToken[]
-  devicePairingCodes      DevicePairingCode[]
-  passwordResetTokens     PasswordResetToken[]
-  fileUploads             FileUpload[]
-  hostedLiveClassSessions BatchSession[]         @relation("HostedLiveClassSessions")
-  assignedCourses         StudentCourseAssignment[] @relation("AssignedCourses")
-  grantedEntitlements     Entitlement[]             @relation("GrantedEntitlements")
-  orders                  Order[]                   @relation("GuardianOrders")
-  teacherApplication      TeacherApplication?       @relation("TeacherApplicant")
-  homeworkSubmissionsMade HomeworkSubmission[]      @relation("HomeworkSubmittedBy")
-  reviewedTeacherApplications TeacherApplication[]  @relation("TeacherApplicationReviewer")
+  roles                       UserRole[]
+  identities                  UserIdentity[]
+  studentProfile              StudentProfile?
+  guardianProfile             GuardianProfile?
+  teacherProfile              TeacherProfile?
+  authSessions                AuthSession[]
+  assignedAssignments         AssessmentAssignment[]    @relation("AssignedAssignments")
+  markedAttempts              AssessmentAttempt[]       @relation("MarkedAttempts")
+  notifications               Notification[]
+  deviceTokens                DeviceToken[]
+  devicePairingCodes          DevicePairingCode[]
+  passwordResetTokens         PasswordResetToken[]
+  fileUploads                 FileUpload[]
+  hostedLiveClassSessions     BatchSession[]            @relation("HostedLiveClassSessions")
+  assignedCourses             StudentCourseAssignment[] @relation("AssignedCourses")
+  grantedEntitlements         Entitlement[]             @relation("GrantedEntitlements")
+  orders                      Order[]                   @relation("GuardianOrders")
+  teacherApplication          TeacherApplication?       @relation("TeacherApplicant")
+  homeworkSubmissionsMade     HomeworkSubmission[]      @relation("HomeworkSubmittedBy")
+  reviewedTeacherApplications TeacherApplication[]      @relation("TeacherApplicationReviewer")
 
   @@map("users")
 }
@@ -201,14 +201,14 @@ enum Gender {
 /// and carries the price, duration and marketing copy that the public catalog
 /// and checkout render.
 model Program {
-  id String @id @default(uuid())
+  id      String  @id @default(uuid())
   /// Nullable on purpose: a Program with no Class is a standalone bundle — the
   /// K-6 micro-course packs — which sits outside the academic
   /// Class -> Program tree but reuses the same SKU machinery.
   classId String?
   name    String
-  code    String @unique
-  slug    String @unique
+  code    String  @unique
+  slug    String  @unique
 
   /// Marketing surface. `shortDescription` is the SEO meta description;
   /// `description` is the long body on the public program page.
@@ -221,7 +221,7 @@ model Program {
   /// hand-supplied syllabus artefact.
   syllabusFileId   String?
 
-  deliveryMode DeliveryMode @default(SELF_PACED)
+  deliveryMode   DeliveryMode @default(SELF_PACED)
   /// Null when there is no fixed calendar length — self-paced bundles with
   /// permanent access.
   durationMonths Int?
@@ -317,10 +317,10 @@ model OrderItem {
   studentProfileId String
 
   /// Exactly one of programId / courseId, same rule as Entitlement.
-  programId     String?
-  courseId      String?
+  programId String?
+  courseId  String?
   /// LIVE purchases consume a seat in a specific batch. Wired in Phase 5.
-  batchId String?
+  batchId   String?
 
   billingMode      BillingMode
   /// What is actually charged for this line, after `creditAppliedCents`.
@@ -410,7 +410,7 @@ enum EntitlementStatus {
 /// transition, not a delete, so the history stays queryable for support and
 /// refund disputes.
 model Entitlement {
-  id               String @id @default(uuid())
+  id               String  @id @default(uuid())
   studentProfileId String
   /// Exactly one of programId / courseId is set — enforced by a CHECK
   /// constraint in the migration, since Prisma cannot express it.
@@ -418,14 +418,14 @@ model Entitlement {
   courseId         String?
   /// Set for LIVE purchases; the batch's end date is what `accessExpiresAt`
   /// tracks. Wired up in Phase 5.
-  batchId    String?
+  batchId          String?
   /// The purchase this grant came from. Null for ADMIN_GRANT / TRIAL / PROMO.
   orderItemId      String? @unique
 
   source EntitlementSource
   status EntitlementStatus @default(ACTIVE)
 
-  accessStartsAt DateTime @default(now())
+  accessStartsAt  DateTime  @default(now())
   /// Null = permanent. Self-paced access stays permanent once fully paid;
   /// live access expires with its batch.
   accessExpiresAt DateTime?
@@ -443,7 +443,7 @@ model Entitlement {
   studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
   program        Program?       @relation(fields: [programId], references: [id], onDelete: Cascade)
   course         Course?        @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  batch    Batch?   @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  batch          Batch?         @relation(fields: [batchId], references: [id], onDelete: SetNull)
   orderItem      OrderItem?     @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
   grantedBy      User?          @relation("GrantedEntitlements", fields: [grantedByUserId], references: [id], onDelete: SetNull)
 
@@ -539,7 +539,7 @@ model Term {
   deletedById    String?
 
   academicYear     AcademicYear     @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
-  batches    Batch[]
+  batches          Batch[]
   assessments      Assessment[]
   gradeBookEntries GradeBookEntry[]
 
@@ -553,30 +553,30 @@ model Term {
 /// level) and `ClassSection` (the roster) — three unrelated models sharing one
 /// word, which made it easy to reach for the wrong one.
 model Batch {
-  id String @id @default(uuid())
+  id                  String      @id @default(uuid())
   /// Nullable only because every row predating the catalogue weld has no
   /// course. New batches always carry one — the API requires it. This link is
   /// what finally joins the catalogue tree to the operational one.
-  courseId String?
+  courseId            String?
   /// Nullable now: a rolling batch belongs to no school term.
-  termId      String?
-  name        String
-  code        String            @unique
-  status      BatchStatus @default(ACTIVE)
-  description String?
+  termId              String?
+  name                String
+  code                String      @unique
+  status              BatchStatus @default(ACTIVE)
+  description         String?
   /// Null = unlimited. Guardian self-enrollment (`isOpenForEnrollment`)
   /// checks this; staff-mediated enrollment does not.
-  capacity    Int?
+  capacity            Int?
   /// Default false is the safety valve for guardian self-enrollment: this
   /// migration makes nothing newly self-enrollable. Staff opt each class in
   /// deliberately.
-  isOpenForEnrollment Boolean   @default(false)
+  isOpenForEnrollment Boolean     @default(false)
 
   /// A LIVE purchase buys a seat in a dated cohort, and `endDate` is what the
   /// resulting entitlement's `accessExpiresAt` tracks — live access ends with
   /// the batch, unlike self-paced which is permanent once paid.
-  startDate          DateTime?
-  endDate            DateTime?
+  startDate              DateTime?
+  endDate                DateTime?
   /// The weekly pattern this cohort meets on. Sessions are not implied by it —
   /// it is the rule used to *generate* BatchSession rows across startDate..endDate,
   /// after which each session is edited independently. Empty means ad-hoc only.
@@ -591,8 +591,8 @@ model Batch {
 
   leadTeacherProfileId String?
 
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
   deletedById String?
 
@@ -699,14 +699,14 @@ model StudentClassPlacement {
 model StudentCourseEnrollment {
   id               String           @id @default(uuid())
   studentProfileId String
-  batchId    String
+  batchId          String
   enrollmentDate   DateTime         @default(now())
   status           EnrollmentStatus @default(ENROLLED)
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
   studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
-  batch    Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  batch          Batch          @relation(fields: [batchId], references: [id], onDelete: Cascade)
 
   @@unique([studentProfileId, batchId])
   @@map("student_course_enrollments")
@@ -774,7 +774,7 @@ model TeacherProfile {
   user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   classAssignments ClassTeacher[]
   courseTeachers   CourseTeacher[]
-  leadBatches      Batch[]   @relation("LeadBatchTeacher")
+  leadBatches      Batch[]         @relation("LeadBatchTeacher")
 
   @@map("teacher_profiles")
 }
@@ -809,8 +809,8 @@ model TeacherApplication {
   /// public object namespace the rest of our uploads use.
   resumeFileId String @unique
 
-  status      TeacherApplicationStatus @default(PENDING)
-  reviewNotes String?
+  status       TeacherApplicationStatus @default(PENDING)
+  reviewNotes  String?
   reviewedById String?
   reviewedAt   DateTime?
 
@@ -837,7 +837,6 @@ model ClassTeacher {
   @@id([teacherProfileId, classSectionId])
   @@map("class_teachers")
 }
-
 
 // ─── Attendance ──────────────────────────────────────────────────────────────
 
@@ -918,8 +917,8 @@ model BatchAttendance {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
-  studentProfile StudentProfile     @relation(fields: [studentProfileId], references: [id], onDelete: Restrict)
-  session        BatchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Restrict)
+  session        BatchSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([studentProfileId, sessionId])
   @@map("batch_attendance")
@@ -945,8 +944,8 @@ enum SubmissionStatus {
 /// gradebook paths are identical either way, and forking them would make every
 /// count and every query ask "which kind?" forever.
 model Homework {
-  id             String   @id @default(uuid())
-  moduleItemId   String?  @unique
+  id             String    @id @default(uuid())
+  moduleItemId   String?   @unique
   /// Was required. A self-paced buyer has no cohort, so demanding one meant
   /// they could not be set homework at all.
   batchId        String?
@@ -956,10 +955,10 @@ model Homework {
   /// learner reaches it. Cohort homework still sets one.
   dueDate        DateTime?
   maxPoints      Int
-  attachmentUrls String[] @default([])
+  attachmentUrls String[]  @default([])
   recordedById   String? // User ID of teacher who created it
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   moduleItem  ModuleItem?          @relation(fields: [moduleItemId], references: [id], onDelete: Cascade)
   batch       Batch?               @relation(fields: [batchId], references: [id], onDelete: Cascade)
@@ -969,29 +968,29 @@ model Homework {
 }
 
 model HomeworkSubmission {
-  id               String           @id @default(uuid())
-  homeworkId       String
-  studentProfileId String
+  id                String           @id @default(uuid())
+  homeworkId        String
+  studentProfileId  String
   /// Who actually handed it in, which is not always whose work it is: a child
   /// created through the family portal has no password and cannot sign in, so
   /// their guardian uploads on their behalf. The teacher marking this should be
   /// able to see that, rather than have it silently attributed to the child.
   /// Null for submissions predating this column.
   submittedByUserId String?
-  submissionDate   DateTime         @default(now())
-  content          String? // Submitted text or solution links
-  status           SubmissionStatus @default(SUBMITTED)
-  pointsEarned     Int?
-  feedback         String?
-  gradedById       String? // User ID of teacher who graded it
-  gradedAt         DateTime?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  submissionDate    DateTime         @default(now())
+  content           String? // Submitted text or solution links
+  status            SubmissionStatus @default(SUBMITTED)
+  pointsEarned      Int?
+  feedback          String?
+  gradedById        String? // User ID of teacher who graded it
+  gradedAt          DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
-  homework           Homework            @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
-  studentProfile     StudentProfile      @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
-  submittedBy        User?               @relation("HomeworkSubmittedBy", fields: [submittedByUserId], references: [id], onDelete: SetNull)
-  attachments        HomeworkSubmissionAttachment[]
+  homework       Homework                       @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+  studentProfile StudentProfile                 @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  submittedBy    User?                          @relation("HomeworkSubmittedBy", fields: [submittedByUserId], references: [id], onDelete: SetNull)
+  attachments    HomeworkSubmissionAttachment[]
 
   @@unique([homeworkId, studentProfileId])
   // Declared to match what `20260821080000_homework_submitted_by` already
@@ -1123,7 +1122,7 @@ model Course {
   programCourses     ProgramCourse[]
   studentAssignments StudentCourseAssignment[]
   entitlements       Entitlement[]
-  batches      Batch[]
+  batches            Batch[]
   courseTeachers     CourseTeacher[]
   orderItems         OrderItem[]
 
@@ -1201,9 +1200,9 @@ model Concept {
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 
-  course       Course?      @relation(fields: [courseId], references: [id], onDelete: SetNull)
-  lessons      Lesson[]
-  items        ModuleItem[]
+  course  Course?      @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  lessons Lesson[]
+  items   ModuleItem[]
 
   @@map("concepts")
 }
@@ -1318,14 +1317,18 @@ model Story {
   /// means free to read, which is what the library is for.
   status CatalogStatus @default(DRAFT)
 
-  title       String
+  title        String
   /// One or two lines, used on the card and in search results.
-  synopsis    String?
+  synopsis     String?
   coverAssetId String? @unique
 
   /// Who the story is written for. Same banding the public catalog filters on,
   /// so a story can sit in the same browse experience as everything else.
   gradeBand GradeBand?
+
+  /// Freeform browse topics, stored in normalized lowercase form. A story can
+  /// belong to several topics without coupling Moon to a fixed taxonomy.
+  topics String[] @default([])
 
   /// Marks this story as readable by anyone, signed in or not, through the
   /// public demo routes.
@@ -1351,14 +1354,30 @@ model Story {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  moduleItem ModuleItem?       @relation(fields: [moduleItemId], references: [id], onDelete: Cascade)
-  cover      StoryAsset?      @relation("StoryCover", fields: [coverAssetId], references: [id], onDelete: SetNull)
+  moduleItem    ModuleItem?         @relation(fields: [moduleItemId], references: [id], onDelete: SetNull)
+  cover         StoryAsset?         @relation("StoryCover", fields: [coverAssetId], references: [id], onDelete: SetNull)
   chapters      StoryChapter[]
   characters    StoryCharacter[]
   assets        StoryAsset[]        @relation("StoryAssets")
   conversations StoryConversation[]
+  releases      StoryRelease[]
 
   @@map("stories")
+}
+
+model StoryRelease {
+  id        String   @id @default(uuid())
+  storyId   String
+  revision  Int
+  snapshot  Json
+  mediaKeys String[]
+  createdAt DateTime @default(now())
+
+  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, revision])
+  @@index([mediaKeys], type: Gin)
+  @@map("story_releases")
 }
 
 model StoryChapter {
@@ -1406,8 +1425,8 @@ model StorySegment {
   /// Storage key for this segment's generated narration, and how long it runs.
   /// Both null until narration is generated — the story is fully authorable and
   /// readable without audio.
-  narrationAudioKey    String?
-  narrationDurationMs  Int?
+  narrationAudioKey   String?
+  narrationDurationMs Int?
 
   /// Character-level timing from the speech provider: `{ characters,
   /// character_start_times_seconds, character_end_times_seconds }`.
@@ -1433,12 +1452,12 @@ model StorySegment {
 /// Artwork and other media. An asset bound to a segment is what changes while
 /// that segment is being narrated; an unbound one is story-level art.
 model StoryAsset {
-  id      String @id @default(uuid())
-  storyId String
+  id        String  @id @default(uuid())
+  storyId   String
   /// Null for story-level artwork such as the cover.
   segmentId String?
 
-  kind StoryAssetKind @default(ILLUSTRATION)
+  kind       StoryAssetKind @default(ILLUSTRATION)
   /// Storage key. Never stored as a URL, and never handed out as one: reads go
   /// through this API's own media endpoint, which streams from local disk or
   /// redirects to a signed URL depending on the active backend.
@@ -1446,13 +1465,13 @@ model StoryAsset {
   /// Required for anything a child sees; stories are read by children who may
   /// use a screen reader.
   altText    String
-  sortOrder  Int @default(1)
+  sortOrder  Int            @default(1)
 
   createdAt DateTime @default(now())
 
-  story    Story         @relation("StoryAssets", fields: [storyId], references: [id], onDelete: Cascade)
-  segment  StorySegment? @relation("SegmentAssets", fields: [segmentId], references: [id], onDelete: Cascade)
-  coverOf  Story?        @relation("StoryCover")
+  story   Story         @relation("StoryAssets", fields: [storyId], references: [id], onDelete: Cascade)
+  segment StorySegment? @relation("SegmentAssets", fields: [segmentId], references: [id], onDelete: Cascade)
+  coverOf Story?        @relation("StoryCover")
 
   @@index([storyId])
   @@index([segmentId])
@@ -1732,23 +1751,29 @@ model AssessmentQuestion {
 }
 
 model Question {
-  id            String      @id @default(uuid())
-  subjectId     String
-  classId       String
-  questionType  String // mcq, short_answer, numeric
-  prompt        String
-  correctAnswer String?
-  difficulty    String      @default("medium") // easy, medium, hard
-  status        String      @default("active") // active, archived
-  widgetType    WidgetType? @default(STANDARD_MCQ)
-  widgetConfig  Json?
-  explanation   String?
-  hints         String[]
-  isGraded      Boolean     @default(true)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  deletedAt     DateTime?
-  deletedById   String?
+  id             String      @id @default(uuid())
+  subjectId      String
+  classId        String
+  questionType   String // mcq, short_answer, numeric
+  prompt         String
+  // Decorative, not part of the answer key — safe to send to a student
+  // before they submit, unlike widgetConfig's secret fields. Lets a prompt
+  // reference a diagram/figure the text alone can't carry (a polygon to
+  // classify, a labeled angle, a shape to read) without needing a dedicated
+  // widget type for every "look at this and answer" question.
+  promptImageUrl String?
+  correctAnswer  String?
+  difficulty     String      @default("medium") // easy, medium, hard
+  status         String      @default("active") // active, archived
+  widgetType     WidgetType? @default(STANDARD_MCQ)
+  widgetConfig   Json?
+  explanation    String?
+  hints          String[]
+  isGraded       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  deletedAt      DateTime?
+  deletedById    String?
 
   subject     Subject              @relation(fields: [subjectId], references: [id])
   class       Class                @relation(fields: [classId], references: [id])
@@ -1955,6 +1980,7 @@ enum WidgetType {
   GRID_MATCHING
   STANDARD_MCQ
   SHAPE_SHADING
+  ANGLE_PROTRACTOR
 }
 
 model Lesson {
@@ -2116,16 +2142,16 @@ enum DevicePairingStatus {
 /// database leak must not hand over live reset links. The raw value exists
 /// only in the email that was sent.
 model PasswordResetToken {
-  id         String    @id @default(uuid())
-  userId     String
-  tokenHash  String    @unique
-  expiresAt  DateTime
+  id          String    @id @default(uuid())
+  userId      String
+  tokenHash   String    @unique
+  expiresAt   DateTime
   /// Set the moment it is redeemed. A token is never valid twice — replaying
   /// an intercepted link after the owner has used it must fail.
-  consumedAt DateTime?
+  consumedAt  DateTime?
   /// Recorded for abuse investigation only; never used to authorise.
   requestedIp String?
-  createdAt  DateTime  @default(now())
+  createdAt   DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -2154,7 +2180,7 @@ model DevicePairingCode {
 }
 
 model FileUpload {
-  id String @id @default(uuid())
+  id           String   @id @default(uuid())
   /// Null for a private object: there is no public URL to hand out, and a
   /// placeholder here would eventually be rendered as one. Reach private files
   /// through a short-lived signed URL instead.
@@ -2172,9 +2198,9 @@ model FileUpload {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  programSyllabi  Program[] @relation("ProgramSyllabus")
-  teacherApplication TeacherApplication? @relation("TeacherApplicationResume")
+  user               User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programSyllabi     Program[]                     @relation("ProgramSyllabus")
+  teacherApplication TeacherApplication?           @relation("TeacherApplicationResume")
   homeworkAttachment HomeworkSubmissionAttachment? @relation("HomeworkAttachment")
 
   @@map("file_uploads")
@@ -2189,7 +2215,6 @@ enum DayOfWeek {
   SATURDAY
   SUNDAY
 }
-
 
 enum GradeSourceType {
   HOMEWORK_SUBMISSION
@@ -2207,7 +2232,7 @@ enum GradeBookEntryStatus {
 model GradeBookEntry {
   id               String               @id @default(uuid())
   studentProfileId String
-  batchId    String?
+  batchId          String?
   termId           String?
   sourceType       GradeSourceType
   sourceId         String?
@@ -2229,7 +2254,7 @@ model GradeBookEntry {
   deletedById      String?
 
   studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Restrict)
-  batch    Batch?   @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  batch          Batch?         @relation(fields: [batchId], references: [id], onDelete: SetNull)
   term           Term?          @relation(fields: [termId], references: [id], onDelete: SetNull)
 
   @@unique([studentProfileId, sourceType, sourceId])

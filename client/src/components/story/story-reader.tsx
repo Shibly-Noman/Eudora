@@ -7,7 +7,7 @@ import { spokenCharCount } from "@/features/stories/narration-timings";
 import type { AgentReply, AskPayload, Story } from "@/features/stories/types";
 import { cn } from "@/lib/utils";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000";
 
 const MIC = "\u{1F3A4}";
 
@@ -25,7 +25,7 @@ export interface StoryReaderProps {
    * anonymous visitor posts to the demo route with a session token — and that
    * is the only real difference between the two.
    */
-  onAsk: (payload: AskPayload) => Promise<AgentReply>;
+  onAsk?: (payload: AskPayload) => Promise<AgentReply>;
   /**
    * Media behind the authenticated routes needs the session cookie, and a
    * cross-origin <audio> or <img> does not send one unless told to. Off for the
@@ -116,9 +116,11 @@ export function StoryReader({
       setAskError(null);
 
       try {
+        if (!onAsk) return;
         const reply = await onAsk({
           ...payload,
           segmentId: current?.segment.id,
+          releaseId: story.releaseId,
           conversationId: conversationRef.current,
         });
 
@@ -130,20 +132,16 @@ export function StoryReader({
         ]);
 
         if (reply.replyAudio) {
-          void new Audio(
-            `data:${reply.replyAudioMimeType};base64,${reply.replyAudio}`,
-          ).play();
+          void new Audio(`data:${reply.replyAudioMimeType};base64,${reply.replyAudio}`).play();
         }
       } catch (error) {
         setExchanges((prior) => prior.slice(0, -1));
-        setAskError(
-          (error as Error).message || "Something went wrong — shall we try again?",
-        );
+        setAskError((error as Error).message || "Something went wrong — shall we try again?");
       } finally {
         setAsking(false);
       }
     },
-    [current, onAsk],
+    [current, onAsk, story.releaseId],
   );
 
   /** Push-to-talk: held to record, released to send. */
@@ -182,53 +180,54 @@ export function StoryReader({
 
   if (!current) {
     return (
-      <p className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+      <p className="text-muted-foreground rounded-lg border border-dashed p-8 text-center">
         This story has no pages yet.
       </p>
     );
   }
 
   const { segment, chapter } = current;
-  const illustration = segment.assets[0] ?? story.cover;
+  const artwork = segment.assets.filter((asset) => asset.kind !== "AUDIO");
   const spent = turnsLeft === 0;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
+    <div className={cn("grid gap-6", onAsk && "lg:grid-cols-[3fr_2fr]")}>
       {/* The book */}
-      <div className="rounded-2xl border bg-card p-6 shadow-sm">
+      <div className="bg-card rounded-2xl border p-6 shadow-sm">
         <div className="flex items-baseline justify-between gap-4">
           <div>
             <h2 className="text-xl font-semibold">{story.title}</h2>
             {chapter.title ? (
-              <p className="text-sm text-muted-foreground">{chapter.title}</p>
+              <p className="text-muted-foreground text-sm">{chapter.title}</p>
             ) : null}
           </div>
-          <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
+          <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
             {page + 1} / {pages.length}
           </span>
         </div>
 
-        {illustration ? (
-          // Plain <img> rather than next/image on purpose: story art is served
-          // by our own API, whose host is not in next.config's remotePatterns
-          // (that list is derived from S3_PUBLIC_URL), so next/image would
-          // refuse to optimise it and fail the request outright.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={`${API_URL}${illustration.url}`}
-            alt={illustration.altText}
-            crossOrigin={withCredentials ? "use-credentials" : undefined}
-            className="mt-4 aspect-[3/2] w-full rounded-xl object-cover"
-          />
-        ) : null}
+        <div key={segment.id} className="mt-4 grid gap-3" aria-label="Section artwork">
+          {artwork.map((asset) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={asset.id}
+              src={API_URL + asset.url}
+              alt={asset.altText}
+              crossOrigin={withCredentials ? "use-credentials" : undefined}
+              className={
+                asset.kind === "BACKGROUND"
+                  ? "aspect-[3/2] w-full rounded-xl object-cover"
+                  : "max-h-[32rem] w-full rounded-xl object-contain"
+              }
+            />
+          ))}
+        </div>
 
         <p className="mt-6 text-lg leading-relaxed">
           {segment.narrationTimings ? (
             <>
               <span>{segment.text.slice(0, spokenChars)}</span>
-              <span className="text-muted-foreground/50">
-                {segment.text.slice(spokenChars)}
-              </span>
+              <span className="text-muted-foreground/50">{segment.text.slice(spokenChars)}</span>
             </>
           ) : (
             segment.text
@@ -256,11 +255,7 @@ export function StoryReader({
           >
             Back
           </Button>
-          <Button
-            onClick={play}
-            disabled={!segment.narrationUrl}
-            className="min-w-28"
-          >
+          <Button onClick={play} disabled={!segment.narrationUrl} className="min-w-28">
             {playing ? "Pause" : "Read to me"}
           </Button>
           <Button
@@ -274,25 +269,24 @@ export function StoryReader({
       </div>
 
       {/* The conversation */}
-      <div className="flex flex-col rounded-2xl border bg-card p-6 shadow-sm">
+      {onAsk && (
+      <div className="bg-card flex flex-col rounded-2xl border p-6 shadow-sm">
         <h3 className="text-lg font-semibold">Ask about the story</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="text-muted-foreground mt-1 text-sm">
           She only knows this story, and only as far as you have read.
         </p>
 
         <div className="mt-4 flex-1 space-y-4 overflow-y-auto">
           {exchanges.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Try asking why something happened.
-            </p>
+            <p className="text-muted-foreground text-sm">Try asking why something happened.</p>
           ) : null}
           {exchanges.map((exchange, index) => (
             <div key={index} className="space-y-1.5">
               <p className="text-sm font-medium">{exchange.question}</p>
               <p
                 className={cn(
-                  "rounded-lg bg-muted px-3 py-2 text-sm",
-                  exchange.pending && "animate-pulse text-muted-foreground",
+                  "bg-muted rounded-lg px-3 py-2 text-sm",
+                  exchange.pending && "text-muted-foreground animate-pulse",
                 )}
               >
                 {exchange.pending ? "thinking…" : exchange.answer}
@@ -301,9 +295,7 @@ export function StoryReader({
           ))}
         </div>
 
-        {askError ? (
-          <p className="mt-3 text-sm text-destructive">{askError}</p>
-        ) : null}
+        {askError ? <p className="text-destructive mt-3 text-sm">{askError}</p> : null}
 
         <form
           className="mt-4 flex gap-2"
@@ -319,7 +311,7 @@ export function StoryReader({
             value={question}
             onChange={(event) => setQuestion(event.target.value)}
             placeholder="Type a question…"
-            className="flex-1 rounded-md border bg-background px-3 py-2 text-sm"
+            className="bg-background flex-1 rounded-md border px-3 py-2 text-sm"
             disabled={asking || spent}
           />
           <Button
@@ -342,11 +334,10 @@ export function StoryReader({
         </form>
 
         {capNotice && turnsLeft !== null ? (
-          <p className="mt-2 text-xs text-muted-foreground">
-            {capNotice(turnsLeft)}
-          </p>
+          <p className="text-muted-foreground mt-2 text-xs">{capNotice(turnsLeft)}</p>
         ) : null}
       </div>
+      )}
     </div>
   );
 }

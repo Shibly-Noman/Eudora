@@ -2,9 +2,10 @@ import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { CheckCircle2, Volume2, X, XCircle } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { resolveUploadUrl } from '@/core/api/baseQuery';
 import type { SubmitCardPayload, SubmitCardResult } from '@/core/contracts';
 import { playSoundEffect } from '@/core/sound/soundEffects';
 import { playText, playVoiceLine } from '@/core/sound/voiceFeedback';
@@ -262,6 +263,22 @@ export default function LessonPlayerScreen() {
           <>
             <View style={{ height: t.spacing.xl }} />
             <MathText variant="label">{card.question.prompt}</MathText>
+            {card.question.promptImageUrl ? (
+              <>
+                <View style={{ height: t.spacing.md }} />
+                <Image
+                  source={{ uri: resolveUploadUrl(card.question.promptImageUrl) ?? undefined }}
+                  accessibilityLabel="Question prompt"
+                  resizeMode="contain"
+                  style={{
+                    width: '100%',
+                    height: 200,
+                    borderRadius: t.radius.lg,
+                    backgroundColor: t.colors.muted,
+                  }}
+                />
+              </>
+            ) : null}
 
             {card.question.hints && card.question.hints.length > 0 && !result ? (
               <>

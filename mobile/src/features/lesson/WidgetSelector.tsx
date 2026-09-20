@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import type { CardQuestion } from '@/core/contracts';
 import { Card } from '@/ui/primitives/Card';
 import { Text } from '@/ui/primitives/Text';
+import { AngleProtractorWidget, type AngleProtractorValue } from './AngleProtractorWidget';
 import { CoordinatePlotterWidget, type CoordinatePlotterValue } from './CoordinatePlotterWidget';
 import { DragDropWidget, type DragDropValue } from './DragDropWidget';
 import { GridMatchingWidget, type GridMatchingValue } from './GridMatchingWidget';
@@ -17,7 +18,11 @@ interface WidgetSelectorProps {
   onStateChange: (state: any) => void;
   locked: boolean;
   isCorrect?: boolean;
-  correctReveal?: { correctValue?: number };
+  correctReveal?: {
+    correctValue?: number;
+    correctAngle?: number;
+    classification?: string | null;
+  };
 }
 
 /**
@@ -109,6 +114,24 @@ export function WidgetSelector({
           onChange={onStateChange}
           locked={locked}
           isCorrect={isCorrect}
+        />
+      );
+
+    case 'ANGLE_PROTRACTOR':
+      return (
+        <AngleProtractorWidget
+          value={(currentState as AngleProtractorValue) ?? null}
+          onChange={onStateChange}
+          locked={locked}
+          isCorrect={isCorrect}
+          correctReveal={
+            correctReveal?.correctAngle !== undefined
+              ? {
+                  correctAngle: correctReveal.correctAngle,
+                  classification: correctReveal.classification ?? null,
+                }
+              : undefined
+          }
         />
       );
 

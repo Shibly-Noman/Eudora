@@ -4,8 +4,17 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ConflictException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { CatalogStatus, Prisma } from '@prisma/client';
+import sharp from 'sharp';
+import {
+  STORY_DETAIL_INCLUDE,
+  StoryDocument,
+  publicationIssues,
+  publicationMediaKeys,
+} from './story-publication';
 import { PrismaService } from '../prisma/prisma.service';
 import { ACTIVE_STORAGE_PROVIDER } from '../uploads/storage.provider';
 // `import type` because it is an interface referenced in a decorated
@@ -23,6 +32,7 @@ import {
   UpdateChapterDto,
   UpdateSegmentDto,
   UpdateStoryDto,
+  UploadArtworkDto,
 } from './dto/story.dto';
 
 /**
@@ -38,6 +48,16 @@ export interface StoryAccess {
   id: string;
   status: CatalogStatus;
   moduleItemId: string | null;
+}
+
+/** Keep author-entered topics stable for filtering and released snapshots. */
+function normalizeTopics(topics?: string[] | null): string[] {
+  return [...new Set((topics ?? []).map((topic) => topic.trim().replace(/\s+/g, ' ').toLowerCase()).filter(Boolean))].slice(0, 8);
+}
+
+function normalizeTopic(topic?: string): string | undefined {
+  const value = topic?.trim().replace(/\s+/g, ' ').toLowerCase();
+  return value || undefined;
 }
 
 const STORY_ACCESS_SELECT = {
@@ -100,6 +120,7 @@ export class StoriesService {
         title: dto.title,
         synopsis: dto.synopsis ?? null,
         gradeBand: dto.gradeBand ?? null,
+        topics: normalizeTopics(dto.topics),
         agentGuidance: dto.agentGuidance ?? null,
       },
     });
@@ -151,32 +172,241 @@ export class StoriesService {
    * a badge reading "Public" on a story nobody can reach. One flag, one story.
    */
   async setPublicDemo(storyId: string, isPublicDemo: boolean) {
-    await this.requireStory(storyId);
-
-    await this.prisma.$transaction(async (tx) => {
-      if (isPublicDemo) {
-        await tx.story.updateMany({
-          where: { isPublicDemo: true, id: { not: storyId } },
-          data: { isPublicDemo: false },
-        });
-      }
-      await tx.story.update({
-        where: { id: storyId },
-        data: { isPublicDemo },
-      });
-    });
-
+    try {
+      await this.prisma.$transaction(
+        async (tx) => {
+          const current = await tx.story.findUnique({ where: { id: storyId } });
+          if (!current) throw new NotFoundException('Story not found');
+          if (isPublicDemo && current.status !== 'PUBLISHED')
+            throw new BadRequestException(
+              'Publish the story before making it the public demo.',
+            );
+          if (isPublicDemo)
+            await tx.story.updateMany({
+              where: { isPublicDemo: true, id: { not: storyId } },
+              data: { isPublicDemo: false },
+            });
+          await tx.story.update({
+            where: { id: storyId },
+            data: { isPublicDemo },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2034'
+      )
+        throw new ConflictException(
+          'Publication changed. Refresh and try again.',
+        );
+      throw error;
+    }
     return this.findOne(storyId);
   }
 
   /** Whether students can find this story on its own. */
   async setStatus(storyId: string, status: CatalogStatus) {
+    try {
+      await this.prisma.$transaction(
+        async (tx) => {
+          const story = await tx.story.findUnique({
+            where: { id: storyId },
+            include: STORY_DETAIL_INCLUDE,
+          });
+          if (!story) throw new NotFoundException('Story not found');
+          if (status === 'PUBLISHED') {
+            const issues = publicationIssues(story);
+            if (issues.length) throw new BadRequestException(issues);
+            const previous = await tx.storyRelease.findFirst({
+              where: { storyId },
+              orderBy: { revision: 'desc' },
+            });
+            await tx.storyRelease.create({
+              data: {
+                storyId,
+                revision: (previous?.revision ?? 0) + 1,
+                snapshot: JSON.parse(
+                  JSON.stringify(story),
+                ) as Prisma.InputJsonValue,
+                mediaKeys: publicationMediaKeys(story),
+              },
+            });
+          }
+          await tx.story.update({
+            where: { id: storyId },
+            data: {
+              status,
+              ...(status !== 'PUBLISHED' ? { isPublicDemo: false } : {}),
+            },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        ['P2034', 'P2002'].includes(error.code)
+      )
+        throw new ConflictException(
+          'The draft changed during publication. Refresh and publish again.',
+        );
+      throw error;
+    }
+    return this.findOne(storyId);
+  }
+
+  async uploadArtwork(
+    storyId: string,
+    dto: UploadArtworkDto,
+    file?: { buffer: Buffer },
+  ) {
     await this.requireStory(storyId);
-    await this.prisma.story.update({
-      where: { id: storyId },
-      data: { status },
+    if (!file?.buffer?.length || file.buffer.length > 10 * 1024 * 1024)
+      throw new BadRequestException(
+        'Choose a PNG, JPEG or WebP image up to 10 MB.',
+      );
+    if (!dto.altText.trim())
+      throw new BadRequestException(
+        'Describe the illustration for readers using assistive technology.',
+      );
+    if (dto.purpose === 'SECTION') {
+      const segment = dto.segmentId
+        ? await this.prisma.storySegment.findUnique({
+            where: { id: dto.segmentId },
+            include: { chapter: true },
+          })
+        : null;
+      if (!segment || segment.chapter.storyId !== storyId)
+        throw new BadRequestException(
+          'Choose a section belonging to this story.',
+        );
+    }
+    if (
+      (process.env.STORAGE_PROVIDER ?? '').toUpperCase() === 'S3' &&
+      !process.env.S3_PRIVATE_BUCKET
+    )
+      throw new ServiceUnavailableException(
+        'Private artwork storage is not configured.',
+      );
+    let buffer: Buffer;
+    try {
+      const input = sharp(file.buffer, { limitInputPixels: 40_000_000 });
+      const metadata = await input.metadata();
+      if (
+        !['png', 'jpeg', 'webp'].includes(metadata.format ?? '') ||
+        (metadata.pages ?? 1) > 1
+      )
+        throw new Error('Unsupported image');
+      buffer = await input
+        .rotate()
+        .resize({
+          width: 2560,
+          height: 2560,
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .webp({ quality: 90 })
+        .toBuffer();
+    } catch {
+      throw new BadRequestException(
+        'This image could not be read. Choose a still PNG, JPEG or WebP under 40 megapixels.',
+      );
+    }
+    const stored = await this.storage.uploadPrivateFile(
+      {
+        buffer,
+        originalname: 'artwork.webp',
+        mimetype: 'image/webp',
+        size: buffer.length,
+      },
+      `story-artwork/${storyId}`,
+    );
+    // Retain uploads on uncertain database failures; never delete media a committed release might reference.
+    await this.prisma.$transaction(async (tx) => {
+      const segmentId = dto.purpose === 'SECTION' ? dto.segmentId : null;
+      const last = await tx.storyAsset.aggregate({
+        where: { storyId, segmentId },
+        _max: { sortOrder: true },
+      });
+      const asset = await tx.storyAsset.create({
+        data: {
+          storyId,
+          segmentId,
+          kind: dto.purpose === 'COVER' ? 'ILLUSTRATION' : dto.kind,
+          storageKey: stored.key,
+          altText: dto.altText.trim(),
+          sortOrder: (last._max.sortOrder ?? 0) + 1,
+        },
+      });
+      if (dto.purpose === 'COVER')
+        await tx.story.update({
+          where: { id: storyId },
+          data: { coverAssetId: asset.id },
+        });
     });
     return this.findOne(storyId);
+  }
+
+  async readerStory(id: string, base = '/api/stories') {
+    const release = await this.prisma.storyRelease.findFirst({
+      where: { storyId: id },
+      orderBy: { revision: 'desc' },
+    });
+    if (!release) {
+      const story = await this.requireStory(id);
+      // Preserve the existing entitled Academic preview path. Moon library and
+      // public demo content must always come from an edition.
+      if (
+        story.moduleItemId &&
+        story.status !== 'PUBLISHED' &&
+        !story.isPublicDemo
+      )
+        return this.findOne(id, base);
+      throw new NotFoundException('This story has no published edition');
+    }
+    return {
+      ...this.withMediaUrls(release.snapshot, `${base}/releases/${release.id}`),
+      releaseId: release.id,
+      revision: release.revision,
+    };
+  }
+
+  async currentMedia(storyId: string, id: string, kind: 'asset' | 'narration') {
+    const release = await this.prisma.storyRelease.findFirst({
+      where: { storyId },
+      orderBy: { revision: 'desc' },
+    });
+    if (release) return this.releaseMedia(release.id, id, kind);
+    const story = await this.requireStory(storyId);
+    if (story.status === 'PUBLISHED' || story.isPublicDemo)
+      throw new NotFoundException('No published edition');
+    return null;
+  }
+
+  async releaseMedia(
+    releaseId: string,
+    id: string,
+    kind: 'asset' | 'narration',
+  ) {
+    const release = await this.prisma.storyRelease.findUnique({
+      where: { id: releaseId },
+    });
+    if (!release) throw new NotFoundException('Edition not found');
+    const story = release.snapshot as unknown as StoryDocument;
+    const segments = story.chapters.flatMap((c) => c.segments);
+    const key =
+      kind === 'asset'
+        ? [
+            story.cover,
+            ...story.assets,
+            ...segments.flatMap((s) => s.assets),
+          ].find((a) => a?.id === id)?.storageKey
+        : segments.find((s) => s.id === id)?.narrationAudioKey;
+    if (!key || !release.mediaKeys.includes(key))
+      throw new NotFoundException('Media not found in this edition');
+    return { storyId: release.storyId, key };
   }
 
   private async assertSlotIsFree(moduleItemId: string, movingStoryId?: string) {
@@ -206,6 +436,7 @@ export class StoriesService {
       title: dto.title,
       synopsis: dto.synopsis,
       gradeBand: dto.gradeBand,
+      topics: dto.topics,
       agentGuidance: dto.agentGuidance,
     });
 
@@ -271,6 +502,7 @@ export class StoriesService {
         title: story.title,
         synopsis: story.synopsis,
         gradeBand: story.gradeBand,
+        topics: story.topics,
         isPublicDemo: story.isPublicDemo,
         status: story.status,
         updatedAt: story.updatedAt,
@@ -291,36 +523,42 @@ export class StoriesService {
    * text where a child expected a voice, and the fix is to narrate it rather
    * than to show it half-finished.
    */
-  async findPublished() {
+  async findPublished(topic?: string) {
+    const normalizedTopic = normalizeTopic(topic);
     const stories = await this.prisma.story.findMany({
+      // Topic changes are draft changes until the author publishes a new
+      // edition, so filtering happens against the released snapshot below.
       where: { status: 'PUBLISHED' },
       orderBy: { updatedAt: 'desc' },
-      include: {
-        cover: true,
-        chapters: {
-          select: { segments: { select: { narrationAudioKey: true } } },
-        },
-      },
+      include: { releases: { orderBy: { revision: 'desc' }, take: 1 } },
     });
-
     return stories
-      .map((story) => {
+      .flatMap((row) => {
+        const release = row.releases[0];
+        if (!release) return [];
+        const story = release.snapshot as unknown as StoryDocument;
         const segments = story.chapters.flatMap((c) => c.segments);
-        return {
-          id: story.id,
-          title: story.title,
-          synopsis: story.synopsis,
-          gradeBand: story.gradeBand,
-          // The same media route the reader uses; its gate lets published
-          // stories through without an entitlement, so a library card renders
-          // for a child who owns no courses at all.
-          coverUrl: story.cover
-            ? `/api/stories/assets/${story.cover.id}/file`
-            : null,
-          pageCount: segments.length,
-          narrated:
-            segments.length > 0 && segments.every((s) => s.narrationAudioKey),
-        };
+        const storyTopics = normalizeTopics(story.topics);
+        if (normalizedTopic && !storyTopics.includes(normalizedTopic)) return [];
+        return [
+          {
+            id: row.id,
+            title: story.title,
+            synopsis: story.synopsis,
+            gradeBand: story.gradeBand,
+            topics: storyTopics,
+            coverUrl: story.cover
+              ? '/api/stories/releases/' +
+                release.id +
+                '/assets/' +
+                story.cover.id +
+                '/file'
+              : null,
+            pageCount: segments.length,
+            narrated:
+              segments.length > 0 && segments.every((s) => s.narrationAudioKey),
+          },
+        ];
       })
       .filter((story) => story.narrated);
   }
@@ -337,7 +575,19 @@ export class StoriesService {
       include: this.detailInclude,
     });
     if (!story) throw new NotFoundException('Story not found');
-    return this.withMediaUrls(story, mediaBase);
+    const latest = await this.prisma.storyRelease.findFirst({
+      where: { storyId: id },
+      orderBy: { revision: 'desc' },
+      select: { revision: true, createdAt: true },
+    });
+    return {
+      ...this.withMediaUrls(story, mediaBase),
+      publication: {
+        revision: latest?.revision ?? null,
+        createdAt: latest?.createdAt ?? null,
+        issues: publicationIssues(story),
+      },
+    };
   }
 
   async findByModuleItem(moduleItemId: string) {
@@ -346,11 +596,14 @@ export class StoriesService {
       include: this.detailInclude,
     });
     if (!story) throw new NotFoundException('Story not found');
-    return this.withMediaUrls(story);
+    return this.readerStory(story.id);
   }
 
   async update(id: string, dto: UpdateStoryDto) {
-    await this.requireStory(id);
+    const current = await this.requireStory(id);
+    const voice = dto.narratorVoiceId?.trim() || null;
+    const voiceChanged =
+      dto.narratorVoiceId !== undefined && voice !== current.narratorVoiceId;
 
     if (dto.coverAssetId) {
       const asset = await this.prisma.storyAsset.findUnique({
@@ -363,19 +616,37 @@ export class StoriesService {
       }
     }
 
-    await this.prisma.story.update({
-      where: { id },
-      data: {
-        ...(dto.title !== undefined ? { title: dto.title } : {}),
-        ...(dto.synopsis !== undefined ? { synopsis: dto.synopsis } : {}),
-        ...(dto.gradeBand !== undefined ? { gradeBand: dto.gradeBand } : {}),
-        ...(dto.agentGuidance !== undefined
-          ? { agentGuidance: dto.agentGuidance }
-          : {}),
-        ...(dto.coverAssetId !== undefined
-          ? { coverAssetId: dto.coverAssetId }
-          : {}),
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.story.update({
+        where: {
+          id,
+          ...(voiceChanged ? { narratorVoiceId: current.narratorVoiceId } : {}),
+        },
+        data: {
+          ...(dto.narratorVoiceId !== undefined
+            ? { narratorVoiceId: voice }
+            : {}),
+          ...(dto.title !== undefined ? { title: dto.title } : {}),
+          ...(dto.synopsis !== undefined ? { synopsis: dto.synopsis } : {}),
+          ...(dto.gradeBand !== undefined ? { gradeBand: dto.gradeBand } : {}),
+          ...(dto.topics !== undefined ? { topics: normalizeTopics(dto.topics) } : {}),
+          ...(dto.agentGuidance !== undefined
+            ? { agentGuidance: dto.agentGuidance }
+            : {}),
+          ...(dto.coverAssetId !== undefined
+            ? { coverAssetId: dto.coverAssetId }
+            : {}),
+        },
+      });
+      if (voiceChanged)
+        await tx.storySegment.updateMany({
+          where: { chapter: { storyId: id } },
+          data: {
+            narrationAudioKey: null,
+            narrationDurationMs: null,
+            narrationTimings: Prisma.DbNull,
+          },
+        });
     });
     return this.findOne(id);
   }
@@ -452,15 +723,12 @@ export class StoriesService {
    * which costs a broken story.
    */
   private async discardAudio(keys: string[]) {
-    for (const key of keys) {
-      await this.storage
-        .deleteFile(key)
-        .catch((error: Error) =>
-          this.logger.warn(
-            `Could not remove orphaned narration ${key}: ${error?.message}`,
-          ),
-        );
-    }
+    // Defer collection: a concurrent publication may still capture these keys.
+    // Retention is intentional; deletion requires a separate release-aware GC.
+    if (keys.length)
+      this.logger.debug(
+        `Retained ${keys.length} recording(s) for edition safety`,
+      );
   }
 
   /**
@@ -782,6 +1050,13 @@ export class StoriesService {
       }
     }
 
+    const owned = await this.prisma.storyAsset.findFirst({
+      where: { storyId, storageKey: dto.storageKey },
+    });
+    if (!owned)
+      throw new BadRequestException(
+        'Upload artwork through this story before reusing it.',
+      );
     await this.prisma.storyAsset.create({
       data: {
         storyId,

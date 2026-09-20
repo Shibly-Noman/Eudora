@@ -18,6 +18,15 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
  */
 export default function StoryLibraryPage() {
   const { data: stories, isLoading, error } = useGetStoryLibraryQuery();
+  const [topic, setTopic] = React.useState("all");
+  const topics = React.useMemo(
+    () => Array.from(new Set((stories ?? []).flatMap((story) => story.topics ?? []))).sort(),
+    [stories],
+  );
+  const visibleStories = React.useMemo(
+    () => (stories ?? []).filter((story) => topic === "all" || (story.topics ?? []).includes(topic)),
+    [stories, topic],
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -52,8 +61,19 @@ export default function StoryLibraryPage() {
           </p>
         </div>
       ) : (
+        <>
+          <div className="flex flex-wrap gap-2" aria-label="Filter stories by topic">
+            <button type="button" onClick={() => setTopic("all")} className={`rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${topic === "all" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary"}`}>All stories</button>
+            {topics.map((value) => <button key={value} type="button" onClick={() => setTopic(value)} className={`rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${topic === value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary"}`}>{topicLabel(value)}</button>)}
+          </div>
+          {visibleStories.length === 0 ? (
+            <div className="border-border bg-muted/40 rounded-2xl border p-12 text-center">
+              <p className="text-foreground/80 text-sm font-bold">No stories in this topic yet</p>
+              <p className="text-muted-foreground mt-1 text-xs">Try another topic to keep exploring.</p>
+            </div>
+          ) : (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {stories.map((story) => (
+          {visibleStories.map((story) => (
             <Link
               key={story.id}
               href={`/story-library/${story.id}`}
@@ -98,6 +118,11 @@ export default function StoryLibraryPage() {
                       {story.synopsis}
                     </p>
                   ) : null}
+                  {story.topics?.length ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {story.topics.map((value) => <span key={value} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">{topicLabel(value)}</span>)}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="border-border/60 mt-6 flex items-center justify-end border-t pt-4">
@@ -109,7 +134,13 @@ export default function StoryLibraryPage() {
             </Link>
           ))}
         </div>
+          )}
+        </>
       )}
     </div>
   );
+}
+
+function topicLabel(value: string) {
+  return value.replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

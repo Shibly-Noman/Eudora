@@ -1,5 +1,10 @@
 import { Parser } from 'expr-eval';
 import {
+  AngleClassification,
+  AngleProtractorFixedConfig,
+  CoordinatePlotterFixedConfig,
+  DragDropFixedConfig,
+  GridMatchingFixedConfig,
   McqParameterizedConfig,
   ShapeShadingFixedConfig,
   SliderParameterizedConfig,
@@ -37,6 +42,12 @@ export type ResolvedAnswer =
       widgetType: 'NUMERIC_OR_TEXT';
       correctAnswer: string | null;
       isNumeric: boolean;
+    }
+  | {
+      widgetType: 'ANGLE_PROTRACTOR';
+      correctAngle: number;
+      tolerance: number;
+      classification: AngleClassification | null;
     }
   | { widgetType: 'UNSUPPORTED' };
 
@@ -100,6 +111,25 @@ export function generateWidgetInstance(
     if (parsed.widgetType === 'SHAPE_SHADING' && parsed.mode === 'fixed') {
       return generateShapeShadingInstance(parsed.config);
     }
+
+    if (parsed.widgetType === 'GRID_MATCHING' && parsed.mode === 'fixed') {
+      return generateGridMatchingInstance(parsed.config);
+    }
+
+    if (parsed.widgetType === 'COORDINATE_PLOTTER' && parsed.mode === 'fixed') {
+      return generateCoordinatePlotterInstance(parsed.config);
+    }
+
+    if (
+      parsed.widgetType === 'DRAG_AND_DROP_LABELS' &&
+      parsed.mode === 'fixed'
+    ) {
+      return generateDragDropInstance(parsed.config);
+    }
+
+    if (parsed.widgetType === 'ANGLE_PROTRACTOR' && parsed.mode === 'fixed') {
+      return generateAngleProtractorInstance(parsed.config);
+    }
   }
 
   // Legacy passthrough — v1, or v2 for widget types without a generator yet:
@@ -128,6 +158,82 @@ function generateShapeShadingInstance(
       totalRegions: config.shape.regions,
       shapeKind: config.shape.kind,
       requireContiguous: config.requireContiguous,
+    },
+  };
+}
+
+// No RNG, no legacy migration, no parameterized mode — same rationale as
+// generateShapeShadingInstance above. The schema's own refine() rules
+// already guarantee correctPairs only references real left/right ids, so
+// (unlike resolveLegacyInstance's GRID_MATCHING branch) there's nothing left
+// to defensively default here.
+function generateGridMatchingInstance(
+  config: GridMatchingFixedConfig,
+): GeneratedInstance {
+  return {
+    displayConfig: { left: config.left, right: config.right },
+    resolvedAnswer: {
+      widgetType: 'GRID_MATCHING',
+      correctPairs: config.correctPairs,
+    },
+  };
+}
+
+function generateCoordinatePlotterInstance(
+  config: CoordinatePlotterFixedConfig,
+): GeneratedInstance {
+  return {
+    displayConfig: {
+      xRange: config.xRange,
+      yRange: config.yRange,
+      gridStep: config.gridStep,
+    },
+    resolvedAnswer: {
+      widgetType: 'COORDINATE_PLOTTER',
+      correctPoints: config.correctPoints,
+      tolerance: config.tolerance,
+    },
+  };
+}
+
+// The schema's refine() rules guarantee at least one target carries a
+// correctLabel, so — unlike resolveLegacyInstance's DRAG_AND_DROP_LABELS
+// branch — this never needs an UNSUPPORTED fallback for an empty answer key.
+function generateDragDropInstance(
+  config: DragDropFixedConfig,
+): GeneratedInstance {
+  const correctPlacements: Record<string, string> = {};
+  for (const target of config.targets) {
+    if (target.correctLabel) {
+      correctPlacements[target.id] = target.correctLabel;
+    }
+  }
+  return {
+    displayConfig: {
+      labels: config.labels,
+      targets: config.targets.map((t) => ({
+        id: t.id,
+        placeholder: t.placeholder,
+      })),
+    },
+    resolvedAnswer: { widgetType: 'DRAG_AND_DROP_LABELS', correctPlacements },
+  };
+}
+
+// correctAngle/tolerance/classification are the answer key — nothing about
+// them belongs in displayConfig, the same reasoning as SLIDER_MANIPULATIVE's
+// fixed branch above. The widget starts from an empty protractor; there is
+// no visual state to strip here at all.
+function generateAngleProtractorInstance(
+  config: AngleProtractorFixedConfig,
+): GeneratedInstance {
+  return {
+    displayConfig: {},
+    resolvedAnswer: {
+      widgetType: 'ANGLE_PROTRACTOR',
+      correctAngle: config.correctAngle,
+      tolerance: config.tolerance,
+      classification: config.classification ?? null,
     },
   };
 }

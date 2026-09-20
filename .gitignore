@@ -1,6 +1,13 @@
 /docs
 /.claude
 
+# Local project guidance and reusable agent workflows. These are intentionally
+# personal to this checkout and must not be committed.
+/SPEC.md
+/ARCHITECTURE.md
+/AGENTS.md
+/skills/
+
 # Environment files (never commit secrets)
 .env
 .env.*

@@ -1,10 +1,12 @@
 "use client";
 
-import { Eye, Plus, Trash2 } from "lucide-react";
+import { arrayMove } from "@dnd-kit/sortable";
+import { Eye, ImageOff, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { FileUploader } from "@/components/file-uploader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,9 +18,11 @@ import {
   useGetSubjectsQuery,
   useUpdateQuestionMutation,
 } from "@/features/assessments/questionsApi";
+import { resolveUploadUrl } from "@/lib/uploads";
 
 import { QuestionPreview } from "./question-preview";
 import { QuestionTypeFields } from "./question-type-fields";
+import { DragHandle, SortableListContext, SortableRow } from "./sortable-list";
 import { WidgetConfigEditor } from "./widget-config-editor";
 
 interface QuestionEditorFormProps {
@@ -44,6 +48,7 @@ export function QuestionEditorForm({ questionId, initialQuestion }: QuestionEdit
   const [difficulty, setDifficulty] = useState<string>("medium");
   const [status, setStatus] = useState<string>("draft");
   const [prompt, setPrompt] = useState<string>("");
+  const [promptImageUrl, setPromptImageUrl] = useState<string | null>(null);
   const [correctAnswer, setCorrectAnswer] = useState<string>("");
   const [options, setOptions] = useState<any[]>([]);
   const [explanation, setExplanation] = useState<string>("");
@@ -61,6 +66,7 @@ export function QuestionEditorForm({ questionId, initialQuestion }: QuestionEdit
       setDifficulty(initialQuestion.difficulty || "medium");
       setStatus(initialQuestion.status || "draft");
       setPrompt(initialQuestion.prompt || "");
+      setPromptImageUrl(initialQuestion.promptImageUrl || null);
       setCorrectAnswer(initialQuestion.correctAnswer || "");
       setOptions(initialQuestion.options || []);
       setExplanation(initialQuestion.explanation || "");
@@ -104,11 +110,23 @@ export function QuestionEditorForm({ questionId, initialQuestion }: QuestionEdit
       // unwinnable question that looks fine in the editor.
       setWidgetConfig({ configVersion: 2, mode: "fixed", min: 0, max: 100, step: 1, unit: "", correctValue: 50 });
     } else if (type === "DRAG_AND_DROP_LABELS") {
-      setWidgetConfig({ labels: ["A", "B", "C"], targets: [] });
+      // configVersion: 2 routes this to widget-config.schema.ts's
+      // DragDropFixedConfigSchema, which rejects a save with zero targets or
+      // no correctLabel anywhere — the exact half-authored shape that used
+      // to save silently and misgrade every real submission.
+      setWidgetConfig({ configVersion: 2, mode: "fixed", labels: ["A", "B", "C"], targets: [] });
     } else if (type === "COORDINATE_PLOTTER") {
-      setWidgetConfig({ xRange: [-10, 10], yRange: [-10, 10], gridStep: 1, correctPoints: [], tolerance: 0.1 });
+      setWidgetConfig({
+        configVersion: 2,
+        mode: "fixed",
+        xRange: [-10, 10],
+        yRange: [-10, 10],
+        gridStep: 1,
+        correctPoints: [],
+        tolerance: 0.1,
+      });
     } else if (type === "GRID_MATCHING") {
-      setWidgetConfig({ left: [], right: [], correctPairs: [] });
+      setWidgetConfig({ configVersion: 2, mode: "fixed", left: [], right: [], correctPairs: [] });
     } else if (type === "SHAPE_SHADING") {
       setWidgetConfig({
         configVersion: 2,
@@ -119,6 +137,8 @@ export function QuestionEditorForm({ questionId, initialQuestion }: QuestionEdit
       });
     } else if (type === "CODE_PLAYGROUND") {
       setWidgetConfig({ language: "javascript", starterCode: "", tests: [] });
+    } else if (type === "ANGLE_PROTRACTOR") {
+      setWidgetConfig({ configVersion: 2, mode: "fixed", correctAngle: 45, tolerance: 5 });
     } else {
       setWidgetConfig(null);
     }
@@ -131,6 +151,8 @@ export function QuestionEditorForm({ questionId, initialQuestion }: QuestionEdit
     setHints(newHints);
   };
   const handleRemoveHint = (idx: number) => setHints(hints.filter((_, i) => i !== idx));
+  const handleReorderHints = (fromIndex: number, toIndex: number) =>
+    setHints(arrayMove(hints, fromIndex, toIndex));
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -157,6 +179,7 @@ export function QuestionEditorForm({ questionId, initialQuestion }: QuestionEdit
       classId,
       questionType: questionType as any,
       prompt,
+      promptImageUrl,
       correctAnswer: questionType === "mcq" ? null : correctAnswer,
       difficulty: difficulty as any,
       status: status as any,
@@ -184,6 +207,7 @@ export function QuestionEditorForm({ questionId, initialQuestion }: QuestionEdit
 
   const draftQuestion: Partial<Question> = {
     prompt,
+    promptImageUrl,
     questionType: questionType as any,
     widgetType: widgetType || null,
     widgetConfig,
@@ -195,7 +219,7 @@ export function QuestionEditorForm({ questionId, initialQuestion }: QuestionEdit
   };
 
   return (
-    <div className="flex h-[calc(100vh-220px)] min-h-[560px] flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+    <div className="flex h-[calc(100vh-220px)] min-h-[560px] flex-col overflow-hidden">
       {/* Mobile split toggle */}
       <div className="mr-8 flex rounded-xl bg-muted p-0.5 md:hidden">
         <button
@@ -325,6 +349,44 @@ export function QuestionEditorForm({ questionId, initialQuestion }: QuestionEdit
             />
           </div>
 
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+              Prompt Image (Optional)
+            </Label>
+            {promptImageUrl ? (
+              <div className="flex items-center gap-3 rounded-2xl border border-border bg-card/50 p-3">
+                {/* Plain <img>: uploaded images come from arbitrary storage-provider origins, so next/image's allowlist would need a new entry per provider. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={resolveUploadUrl(promptImageUrl) || undefined}
+                  alt="Question prompt"
+                  className="h-16 w-16 shrink-0 rounded-xl border border-border object-cover"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-semibold text-foreground">
+                    Image attached
+                  </p>
+                  <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{promptImageUrl}</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setPromptImageUrl(null)}
+                  className="h-8 w-8 shrink-0 cursor-pointer rounded-full hover:bg-muted"
+                >
+                  <ImageOff className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                </Button>
+              </div>
+            ) : (
+              <FileUploader
+                label="Upload a prompt image"
+                accept="image/*"
+                onUploadSuccess={setPromptImageUrl}
+              />
+            )}
+          </div>
+
           {!(questionType === "mcq" && widgetType === "STANDARD_MCQ") && (
             <QuestionTypeFields
               questionType={questionType}
@@ -352,6 +414,7 @@ export function QuestionEditorForm({ questionId, initialQuestion }: QuestionEdit
                 <SelectItem value="GRID_MATCHING">Grid Matching</SelectItem>
                 <SelectItem value="CODE_PLAYGROUND">Code Playground (practice · not marked)</SelectItem>
                 <SelectItem value="SHAPE_SHADING">Shape Shading</SelectItem>
+                <SelectItem value="ANGLE_PROTRACTOR">Angle Protractor</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -385,27 +448,37 @@ export function QuestionEditorForm({ questionId, initialQuestion }: QuestionEdit
                 <Plus className="h-4 w-4" /> Add Hint
               </button>
             </div>
-            <div className="space-y-2">
-              {hints.map((hint, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-muted-foreground">{idx + 1}.</span>
-                  <Input
-                    type="text"
-                    placeholder="Hint details..."
-                    value={hint}
-                    onChange={(e) => handleUpdateHint(idx, e.target.value)}
-                    className="h-9 flex-1 rounded-xl text-xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveHint(idx)}
-                    className="rounded-xl border border-border bg-card p-2.5 text-muted-foreground hover:bg-muted hover:text-destructive"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
+            <SortableListContext
+              ids={hints.map((_, idx) => `hint-${idx}`)}
+              onReorder={handleReorderHints}
+            >
+              <div className="space-y-2">
+                {hints.map((hint, idx) => (
+                  <SortableRow key={idx} id={`hint-${idx}`} className="flex items-center gap-2">
+                    {(handle) => (
+                      <>
+                        <DragHandle {...handle} />
+                        <span className="text-xs font-bold text-muted-foreground">{idx + 1}.</span>
+                        <Input
+                          type="text"
+                          placeholder="Hint details..."
+                          value={hint}
+                          onChange={(e) => handleUpdateHint(idx, e.target.value)}
+                          className="h-9 flex-1 rounded-xl text-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveHint(idx)}
+                          className="rounded-xl border border-border bg-card p-2.5 text-muted-foreground hover:bg-muted hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </SortableRow>
+                ))}
+              </div>
+            </SortableListContext>
           </div>
 
           <div className="flex items-center justify-end gap-2 border-t border-border pt-4">

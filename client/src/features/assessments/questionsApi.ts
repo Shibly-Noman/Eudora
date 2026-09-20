@@ -13,6 +13,7 @@ export interface Question {
   classId: string;
   questionType: "mcq" | "short_answer" | "numeric" | "written";
   prompt: string;
+  promptImageUrl?: string | null;
   correctAnswer?: string | null;
   difficulty: "easy" | "medium" | "hard" | "extension";
   status: "draft" | "active" | "archived";

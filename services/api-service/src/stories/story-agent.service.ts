@@ -75,6 +75,7 @@ export class StoryAgentService {
     demoSessionId: string | null;
     conversationId?: string;
     segmentId?: string;
+    releaseId?: string;
     text?: string;
     audio?: { buffer: Buffer; mimeType: string };
     /** Whether to synthesise the reply, or return text only. */
@@ -86,7 +87,7 @@ export class StoryAgentService {
       await this.assertDemoBudget();
     }
 
-    const story = await this.prisma.story.findUnique({
+    let story = await this.prisma.story.findUnique({
       where: { id: params.storyId },
       include: {
         characters: { orderBy: { sortOrder: 'asc' } },
@@ -97,6 +98,28 @@ export class StoryAgentService {
       },
     });
     if (!story) throw new NotFoundException('Story not found');
+    const release = await this.prisma.storyRelease.findFirst({
+      where: {
+        storyId: params.storyId,
+        ...(params.releaseId ? { id: params.releaseId } : {}),
+      },
+      orderBy: { revision: 'desc' },
+    });
+    if (params.releaseId && !release)
+      throw new BadRequestException('That edition is not part of this story');
+    if (release)
+      story = release.snapshot as unknown as NonNullable<typeof story>;
+
+    // An unknown position otherwise falls through to the entire story in
+    // buildGrounding. Reject it before paying to transcribe or answer.
+    if (
+      params.segmentId &&
+      !story.chapters.some((chapter) =>
+        chapter.segments.some((segment) => segment.id === params.segmentId),
+      )
+    ) {
+      throw new BadRequestException('That page is not part of this story');
+    }
 
     const childText = await this.resolveQuestion(params);
 

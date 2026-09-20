@@ -147,6 +147,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
+  // The question builder's split edit/preview panes want the full width the
+  // sidebar leaves available — the shared max-w-7xl below reads as a narrow
+  // column with two cramped panes side by side. Every other dashboard page
+  // (lists, tables, dashboards) keeps the standard centered width; this is
+  // scoped to just the two question-editor routes rather than raising the
+  // cap for the whole dashboard.
+  const isQuestionEditorRoute = /^\/questions\/[^/]+$/.test(pathname ?? "");
+
   const sidebarContent = (
     <AppSidebar
       user={user}
@@ -165,7 +173,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         className="flex min-h-[calc(100vh-var(--header-height)-75px)] flex-1 flex-col outline-none"
       >
         <div className="flex flex-1 flex-col gap-2">
-          <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-6 md:gap-6 lg:px-6">
+          <div
+            className={`mx-auto flex w-full flex-col gap-4 px-4 py-6 md:gap-6 lg:px-6 ${
+              isQuestionEditorRoute ? "max-w-none" : "max-w-7xl"
+            }`}
+          >
             {/* The list pages read their filter/sort/page state from the URL via
                 useListQueryState -> useSearchParams, which opts its subtree out of prerendering and
                 fails a production build unless a boundary sits above it. One boundary here covers

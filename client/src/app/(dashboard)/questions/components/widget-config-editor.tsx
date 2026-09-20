@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { arrayMove } from "@dnd-kit/sortable";
 import { Code, Dices, Plus, Trash2 } from "lucide-react";
 import React, { useEffect,useState } from "react";
 
@@ -10,8 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePreviewWidgetInstanceMutation } from "@/features/assessments/questionsApi";
+import { AngleProtractorWidget } from "@/features/clio/widgets/AngleProtractorWidget";
 import { CoordinatePlotterWidget } from "@/features/clio/widgets/CoordinatePlotterWidget";
 import { ShapeShadingWidget } from "@/features/clio/widgets/ShapeShadingWidget";
+
+import { DragHandle, SortableListContext, SortableRow } from "./sortable-list";
 
 // Shared "Generate Preview" control for parameterized widgets — hits the
 // stateless preview endpoint so authors can sanity-check a sample instance
@@ -494,6 +498,10 @@ export function WidgetConfigEditor({ widgetType, value, onChange }: WidgetConfig
           updateField("labels", newLabels);
         };
 
+        const handleReorderLabels = (fromIndex: number, toIndex: number) => {
+          updateField("labels", arrayMove(labels, fromIndex, toIndex));
+        };
+
         const handleAddTarget = () => {
           updateField("targets", [
             ...targets,
@@ -511,6 +519,10 @@ export function WidgetConfigEditor({ widgetType, value, onChange }: WidgetConfig
           updateField("targets", newTargets);
         };
 
+        const handleReorderTargets = (fromIndex: number, toIndex: number) => {
+          updateField("targets", arrayMove(targets, fromIndex, toIndex));
+        };
+
         return (
           <div className="space-y-4">
             {/* Labels Bank */}
@@ -525,26 +537,44 @@ export function WidgetConfigEditor({ widgetType, value, onChange }: WidgetConfig
                   <Plus className="h-3 w-3" /> Add Label
                 </button>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {labels.map((lbl, idx) => (
-                  <div key={idx} className="flex items-center gap-1 rounded-xl border border-border bg-card p-1 pl-2">
-                    <input
-                      type="text"
-                      value={lbl}
-                      placeholder={`Label ${idx + 1}...`}
-                      onChange={(e) => handleUpdateLabel(idx, e.target.value)}
-                      className="border-none bg-transparent font-sans text-xs font-semibold text-foreground focus:outline-none w-20"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveLabel(idx)}
-                      className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+              <SortableListContext
+                ids={labels.map((_, idx) => `label-${idx}`)}
+                onReorder={handleReorderLabels}
+                layout="wrap"
+              >
+                <div className="flex flex-wrap gap-2">
+                  {labels.map((lbl, idx) => (
+                    <SortableRow
+                      key={idx}
+                      id={`label-${idx}`}
+                      className="flex items-center gap-1 rounded-xl border border-border bg-card p-1 pl-1"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+                      {(handle) => (
+                        <>
+                          <DragHandle
+                            {...handle}
+                            className="flex h-7 w-7 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
+                          />
+                          <input
+                            type="text"
+                            value={lbl}
+                            placeholder={`Label ${idx + 1}...`}
+                            onChange={(e) => handleUpdateLabel(idx, e.target.value)}
+                            className="border-none bg-transparent font-sans text-xs font-semibold text-foreground focus:outline-none w-20"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveLabel(idx)}
+                            className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </SortableRow>
+                  ))}
+                </div>
+              </SortableListContext>
             </div>
 
             {/* Target Slots */}
@@ -559,41 +589,58 @@ export function WidgetConfigEditor({ widgetType, value, onChange }: WidgetConfig
                   <Plus className="h-3 w-3" /> Add Slot
                 </button>
               </div>
-              <div className="space-y-2">
-                {targets.map((t, idx) => (
-                  <div key={idx} className="flex gap-2 items-center">
-                    <Input
-                      type="text"
-                      placeholder="Placeholder text (e.g. 'Solve 3 + ___')"
-                      value={t.placeholder ?? ""}
-                      onChange={(e) => handleUpdateTarget(idx, "placeholder", e.target.value)}
-                      className="h-9 rounded-xl text-xs flex-1"
-                    />
-                    <Select
-                      value={t.correctLabel || ""}
-                      onValueChange={(val) => handleUpdateTarget(idx, "correctLabel", val)}
+              <SortableListContext
+                ids={targets.map((t, idx) => t.id ?? `target-idx-${idx}`)}
+                onReorder={handleReorderTargets}
+              >
+                <div className="space-y-2">
+                  {targets.map((t, idx) => (
+                    <SortableRow
+                      key={idx}
+                      id={t.id ?? `target-idx-${idx}`}
+                      className="flex gap-2 items-center"
                     >
-                      <SelectTrigger className="h-9 w-40 rounded-xl text-xs border-border bg-muted/50">
-                        <SelectValue placeholder="Correct label..." />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        {labels.filter(Boolean).map((lbl, lIdx) => (
-                          <SelectItem key={lIdx} value={lbl}>
-                            {lbl}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveTarget(idx)}
-                      className="rounded-xl border border-border bg-card p-2 text-muted-foreground hover:bg-muted hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+                      {(handle) => (
+                        <>
+                          <DragHandle
+                            {...handle}
+                            className="flex h-9 w-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
+                          />
+                          <Input
+                            type="text"
+                            placeholder="Placeholder text (e.g. 'Solve 3 + ___')"
+                            value={t.placeholder ?? ""}
+                            onChange={(e) => handleUpdateTarget(idx, "placeholder", e.target.value)}
+                            className="h-9 rounded-xl text-xs flex-1"
+                          />
+                          <Select
+                            value={t.correctLabel || ""}
+                            onValueChange={(val) => handleUpdateTarget(idx, "correctLabel", val)}
+                          >
+                            <SelectTrigger className="h-9 w-40 rounded-xl text-xs border-border bg-muted/50">
+                              <SelectValue placeholder="Correct label..." />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl">
+                              {labels.filter(Boolean).map((lbl, lIdx) => (
+                                <SelectItem key={lIdx} value={lbl}>
+                                  {lbl}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTarget(idx)}
+                            className="rounded-xl border border-border bg-card p-2 text-muted-foreground hover:bg-muted hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
+                    </SortableRow>
+                  ))}
+                </div>
+              </SortableListContext>
               {targets.length > 0 && !targets.some((t) => t.correctLabel) && (
                 <p className="text-[10px] font-semibold text-destructive">
                   No slot has a correct label set — this question cannot be graded. Pick a
@@ -818,6 +865,75 @@ export function WidgetConfigEditor({ widgetType, value, onChange }: WidgetConfig
         );
       }
 
+      case "ANGLE_PROTRACTOR": {
+        const correctAngle: number = value?.correctAngle ?? 45;
+        const tolerance: number = value?.tolerance ?? 5;
+        const classification: string = value?.classification ?? "none";
+
+        return (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-muted-foreground block">
+                Correct Angle
+              </Label>
+              <p className="text-[10px] text-muted-foreground">
+                Drag the slider (or type a value) to set the angle a student&apos;s answer is graded
+                against — this is the same control students see, just unlocked.
+              </p>
+              <div className="flex justify-center bg-muted/50 p-4 rounded-2xl">
+                <AngleProtractorWidget
+                  config={{}}
+                  value={{ angle: correctAngle }}
+                  onChange={(newValue) => updateField("correctAngle", newValue.angle)}
+                  locked={false}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground">
+                  Tolerance (± degrees)
+                </Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={45}
+                  value={tolerance}
+                  onChange={(e) => updateField("tolerance", Number(e.target.value))}
+                  className="h-10 rounded-xl text-xs"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground">
+                  Classification (optional)
+                </Label>
+                <Select
+                  value={classification}
+                  onValueChange={(val) =>
+                    updateField("classification", val === "none" ? undefined : val)
+                  }
+                >
+                  <SelectTrigger className="h-10 rounded-xl text-xs bg-muted/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    <SelectItem value="none">None — angle only</SelectItem>
+                    <SelectItem value="acute">Acute</SelectItem>
+                    <SelectItem value="right">Right</SelectItem>
+                    <SelectItem value="obtuse">Obtuse</SelectItem>
+                    <SelectItem value="straight">Straight</SelectItem>
+                    <SelectItem value="reflex">Reflex</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <GeneratePreviewButton widgetType="ANGLE_PROTRACTOR" config={value} />
+          </div>
+        );
+      }
+
       case "GRID_MATCHING": {
         const left: any[] = value?.left ?? [];
         const right: any[] = value?.right ?? [];
@@ -848,6 +964,11 @@ export function WidgetConfigEditor({ widgetType, value, onChange }: WidgetConfig
             field === "left" ? lId !== itemId : rId !== itemId
           );
           updateField("correctPairs", newPairs);
+        };
+
+        const handleReorderItem = (field: "left" | "right", fromIndex: number, toIndex: number) => {
+          const list = field === "left" ? left : right;
+          updateField(field, arrayMove(list, fromIndex, toIndex));
         };
 
         const handleAddPair = () => {
@@ -886,26 +1007,43 @@ export function WidgetConfigEditor({ widgetType, value, onChange }: WidgetConfig
                     <Plus className="h-3 w-3" /> Add Item
                   </button>
                 </div>
-                <div className="space-y-1.5">
-                  {left.map((item, idx) => (
-                    <div key={idx} className="flex gap-1.5 items-center">
-                      <Input
-                        type="text"
-                        placeholder="Item text..."
-                        value={item.text}
-                        onChange={(e) => handleUpdateItem("left", idx, e.target.value)}
-                        className="h-9 rounded-xl text-xs flex-1"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveItem("left", idx)}
-                        className="rounded-xl border border-border bg-card p-2.5 text-muted-foreground hover:bg-muted hover:text-destructive"
+                <SortableListContext
+                  ids={left.map((item, idx) => item.id ?? `left-idx-${idx}`)}
+                  onReorder={(from, to) => handleReorderItem("left", from, to)}
+                >
+                  <div className="space-y-1.5">
+                    {left.map((item, idx) => (
+                      <SortableRow
+                        key={idx}
+                        id={item.id ?? `left-idx-${idx}`}
+                        className="flex gap-1.5 items-center"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                        {(handle) => (
+                          <>
+                            <DragHandle
+                              {...handle}
+                              className="flex h-9 w-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
+                            />
+                            <Input
+                              type="text"
+                              placeholder="Item text..."
+                              value={item.text}
+                              onChange={(e) => handleUpdateItem("left", idx, e.target.value)}
+                              className="h-9 rounded-xl text-xs flex-1"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItem("left", idx)}
+                              className="rounded-xl border border-border bg-card p-2.5 text-muted-foreground hover:bg-muted hover:text-destructive"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </SortableRow>
+                    ))}
+                  </div>
+                </SortableListContext>
               </div>
 
               {/* Right Column Items */}
@@ -920,26 +1058,43 @@ export function WidgetConfigEditor({ widgetType, value, onChange }: WidgetConfig
                     <Plus className="h-3 w-3" /> Add Item
                   </button>
                 </div>
-                <div className="space-y-1.5">
-                  {right.map((item, idx) => (
-                    <div key={idx} className="flex gap-1.5 items-center">
-                      <Input
-                        type="text"
-                        placeholder="Item text..."
-                        value={item.text}
-                        onChange={(e) => handleUpdateItem("right", idx, e.target.value)}
-                        className="h-9 rounded-xl text-xs flex-1"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveItem("right", idx)}
-                        className="rounded-xl border border-border bg-card p-2.5 text-muted-foreground hover:bg-muted hover:text-destructive"
+                <SortableListContext
+                  ids={right.map((item, idx) => item.id ?? `right-idx-${idx}`)}
+                  onReorder={(from, to) => handleReorderItem("right", from, to)}
+                >
+                  <div className="space-y-1.5">
+                    {right.map((item, idx) => (
+                      <SortableRow
+                        key={idx}
+                        id={item.id ?? `right-idx-${idx}`}
+                        className="flex gap-1.5 items-center"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                        {(handle) => (
+                          <>
+                            <DragHandle
+                              {...handle}
+                              className="flex h-9 w-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
+                            />
+                            <Input
+                              type="text"
+                              placeholder="Item text..."
+                              value={item.text}
+                              onChange={(e) => handleUpdateItem("right", idx, e.target.value)}
+                              className="h-9 rounded-xl text-xs flex-1"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItem("right", idx)}
+                              className="rounded-xl border border-border bg-card p-2.5 text-muted-foreground hover:bg-muted hover:text-destructive"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </SortableRow>
+                    ))}
+                  </div>
+                </SortableListContext>
               </div>
             </div>
 

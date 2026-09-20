@@ -54,6 +54,12 @@ export const CodePlaygroundConfigSchema = z.object({
   tests: z.array(CodePlaygroundTestSchema).default([]),
 });
 
+// Never carries correctAngle/tolerance/classification — the server strips
+// the answer key out of displayConfig entirely (see widget-generator.ts's
+// ANGLE_PROTRACTOR branch), so there's nothing left in the config a student
+// receives pre-submission.
+export const AngleProtractorConfigSchema = z.object({});
+
 export const WidgetConfigSchemaMap = {
   STANDARD_MCQ: z.null().or(z.object({})),
   SLIDER_MANIPULATIVE: SliderConfigSchema,
@@ -61,6 +67,7 @@ export const WidgetConfigSchemaMap = {
   COORDINATE_PLOTTER: CoordinatePlotterConfigSchema,
   GRID_MATCHING: GridMatchingConfigSchema,
   CODE_PLAYGROUND: CodePlaygroundConfigSchema,
+  ANGLE_PROTRACTOR: AngleProtractorConfigSchema,
 };
 
 export type SliderConfig = z.infer<typeof SliderConfigSchema>;
@@ -68,3 +75,4 @@ export type DragDropConfig = z.infer<typeof DragDropConfigSchema>;
 export type CoordinatePlotterConfig = z.infer<typeof CoordinatePlotterConfigSchema>;
 export type GridMatchingConfig = z.infer<typeof GridMatchingConfigSchema>;
 export type CodePlaygroundConfig = z.infer<typeof CodePlaygroundConfigSchema>;
+export type AngleProtractorConfig = z.infer<typeof AngleProtractorConfigSchema>;

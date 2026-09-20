@@ -38,6 +38,7 @@ import {
 import { useClioVoice } from "@/features/clio/sound/useClioVoice";
 import { WidgetSelector } from "@/features/clio/widgets/WidgetSelector";
 import { useGetGamificationMeQuery } from "@/features/student/studentApi";
+import { resolveUploadUrl } from "@/lib/uploads";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 
 export default function LessonFlowPage() {
@@ -307,6 +308,14 @@ export default function LessonFlowPage() {
                 <div className="text-foreground mt-1 text-sm font-semibold">
                   <MathRenderer text={currentCard.question.prompt} />
                 </div>
+                {currentCard.question.promptImageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={resolveUploadUrl(currentCard.question.promptImageUrl) || undefined}
+                    alt="Question prompt"
+                    className="mt-3 max-h-72 w-full rounded-2xl border border-border object-contain"
+                  />
+                )}
               </div>
 
               <WidgetSelector
@@ -451,7 +460,7 @@ export default function LessonFlowPage() {
                   </>
                 )}
               </button>
-            </div>
+            </div>
             <div
               className="flex items-start gap-2.5 cursor-pointer"
               onClick={() => speakText(getMascotSpeech())}

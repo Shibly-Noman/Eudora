@@ -17,6 +17,35 @@ import type {
 export const storiesApi = authApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
+    narratorVoices: builder.query<
+      {
+        voices: { id: string; name: string; previewUrl: string | null }[];
+        defaultVoiceId: string;
+        hasMore: boolean;
+      },
+      string
+    >({
+      query: (search) => "/stories/narrator-voices?search=" + encodeURIComponent(search),
+    }),
+    updateStoryDetails: builder.mutation<
+      Story,
+      { storyId: string; title: string; synopsis: string; narratorVoiceId: string | null; topics: string[] }
+    >({
+      query: ({ storyId, ...body }) => ({ url: "/stories/" + storyId, method: "PATCH", body }),
+      invalidatesTags: [{ type: "StoryContent" } as any, "StoryList" as any],
+    }),
+    uploadArtwork: builder.mutation<Story, { storyId: string; body: FormData }>({
+      query: ({ storyId, body }) => ({
+        url: "/stories/" + storyId + "/artwork",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: [{ type: "StoryContent" } as any, "StoryList" as any],
+    }),
+    removeArtwork: builder.mutation<Story, string>({
+      query: (id) => ({ url: "/stories/assets/" + id, method: "DELETE" }),
+      invalidatesTags: [{ type: "StoryContent" } as any, "StoryList" as any],
+    }),
     /**
      * Keyed by module item rather than story id because that is what the course
      * outline links to, and what the entitlement check is expressed in terms
@@ -44,9 +73,7 @@ export const storiesApi = authApi.injectEndpoints({
      */
     getLibraryStory: builder.query<Story, string>({
       query: (id: string) => `/stories/library/${id}`,
-      providesTags: (_r: any, _e: any, id: string) => [
-        { type: "StoryContent", id },
-      ],
+      providesTags: (_r: any, _e: any, id: string) => [{ type: "StoryContent", id }],
     } as any),
 
     askStory: builder.mutation<AgentReply, { storyId: string } & AskPayload>({
@@ -72,24 +99,20 @@ export const storiesApi = authApi.injectEndpoints({
       // Tagged per story, not as one global "StoryContent": narrating one
       // story should not discard every other story cached in the editor, and
       // an untagged pair here silently failed to refetch at all.
-      providesTags: (_r: any, _e: any, id: string) => [
-        { type: "StoryContent", id },
-      ],
+      providesTags: (_r: any, _e: any, id: string) => [{ type: "StoryContent", id }],
     } as any),
 
     /**
      * Splits pasted prose into pages and proposes emotion markup. Writes
      * nothing — the editor holds the result until an author accepts it.
      */
-    draftStory: builder.mutation<StoryDraft, { source: string; title?: string }>(
-      {
-        query: (body: { source: string; title?: string }) => ({
-          url: "/stories/draft",
-          method: "POST",
-          body,
-        }),
-      } as any,
-    ),
+    draftStory: builder.mutation<StoryDraft, { source: string; title?: string }>({
+      query: (body: { source: string; title?: string }) => ({
+        url: "/stories/draft",
+        method: "POST",
+        body,
+      }),
+    } as any),
 
     importStory: builder.mutation<Story, Record<string, unknown>>({
       query: (body: Record<string, unknown>) => ({
@@ -172,10 +195,7 @@ export const storiesApi = authApi.injectEndpoints({
       invalidatesTags: [{ type: "StoryContent" } as any, "StoryList" as any],
     } as any),
 
-    setPublicDemo: builder.mutation<
-      Story,
-      { storyId: string; isPublicDemo: boolean }
-    >({
+    setPublicDemo: builder.mutation<Story, { storyId: string; isPublicDemo: boolean }>({
       query: ({ storyId, isPublicDemo }: { storyId: string; isPublicDemo: boolean }) => ({
         url: `/stories/${storyId}/public-demo`,
         method: "PATCH",
@@ -215,6 +235,10 @@ export const storiesApi = authApi.injectEndpoints({
 });
 
 export const {
+  useNarratorVoicesQuery,
+  useUpdateStoryDetailsMutation,
+  useUploadArtworkMutation,
+  useRemoveArtworkMutation,
   useGetStoryByModuleItemQuery,
   useGetStoryLibraryQuery,
   useGetLibraryStoryQuery,

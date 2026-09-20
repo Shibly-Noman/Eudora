@@ -3,6 +3,7 @@
 import React from "react";
 
 import type { ClioQuestion } from "../clioApi";
+import { AngleProtractorWidget } from "./AngleProtractorWidget";
 import { CodePlaygroundWidget } from "./CodePlaygroundWidget";
 import { ComingSoonWidget } from "./ComingSoonWidget";
 import { CoordinatePlotterWidget } from "./CoordinatePlotterWidget";
@@ -27,6 +28,8 @@ export interface WidgetSelectorProps {
     correctPoints?: { x: number; y: number }[];
     tolerance?: number;
     correctPairs?: [string, string][];
+    correctAngle?: number;
+    classification?: string | null;
   };
 }
 
@@ -121,6 +124,22 @@ export function WidgetSelector({
           onChange={(newValue) => onStateChange(newValue)}
           locked={locked}
           isCorrect={isCorrect}
+        />
+      );
+
+    case "ANGLE_PROTRACTOR":
+      return (
+        <AngleProtractorWidget
+          config={(question.widgetConfig as any) ?? {}}
+          value={currentState}
+          onChange={(newValue) => onStateChange(newValue)}
+          locked={locked}
+          isCorrect={isCorrect}
+          correctReveal={
+            correctReveal?.correctAngle !== undefined
+              ? { correctAngle: correctReveal.correctAngle, classification: correctReveal.classification ?? null }
+              : undefined
+          }
         />
       );
 

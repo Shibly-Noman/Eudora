@@ -282,6 +282,10 @@ export class CreateQuestionDto {
 
   @IsOptional()
   @IsString()
+  promptImageUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
   correctAnswer?: string | null;
 
   @IsEnum(['easy', 'medium', 'hard', 'extension'])
@@ -333,6 +337,10 @@ export class UpdateQuestionDto {
   @IsOptional()
   @IsString()
   prompt?: string;
+
+  @IsOptional()
+  @IsString()
+  promptImageUrl?: string | null;
 
   @IsOptional()
   @IsString()

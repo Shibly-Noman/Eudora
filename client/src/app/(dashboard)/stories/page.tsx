@@ -1,6 +1,6 @@
 "use client";
 
-import { BookHeadphones, Globe, Plus, Volume2 } from "lucide-react";
+import { BookHeadphones, Filter, Globe, Plus, Volume2 } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 
@@ -9,6 +9,15 @@ import { useGetStoriesQuery } from "@/features/stories/storiesApi";
 
 export default function StoriesPage() {
   const { data: stories, isLoading } = useGetStoriesQuery();
+  const [topic, setTopic] = React.useState("all");
+  const topics = React.useMemo(
+    () => Array.from(new Set((stories ?? []).flatMap((story) => story.topics ?? []))).sort(),
+    [stories],
+  );
+  const visibleStories = React.useMemo(
+    () => (stories ?? []).filter((story) => topic === "all" || (story.topics ?? []).includes(topic)),
+    [stories, topic],
+  );
 
   return (
     <div className="space-y-6 p-6">
@@ -48,8 +57,28 @@ export default function StoriesPage() {
           </Button>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {stories.map((story) => {
+        <>
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <label className="text-xs font-semibold text-foreground" htmlFor="story-topic-filter">Topic</label>
+            <select
+              id="story-topic-filter"
+              value={topic}
+              onChange={(event) => setTopic(event.target.value)}
+              className="h-8 rounded-lg border border-border bg-background px-2 text-xs"
+            >
+              <option value="all">All topics</option>
+              {topics.map((value) => <option key={value} value={value}>{topicLabel(value)}</option>)}
+            </select>
+            {topic !== "all" ? <span className="text-[10px] text-muted-foreground">{visibleStories.length} matching {visibleStories.length === 1 ? "story" : "stories"}</span> : null}
+          </div>
+          {visibleStories.length === 0 ? (
+            <div className="rounded-xl border border-dashed p-8 text-center text-xs text-muted-foreground">
+              No stories have been assigned to this topic yet.
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {visibleStories.map((story) => {
             const fullyNarrated =
               story.segmentCount > 0 &&
               story.narratedCount === story.segmentCount;
@@ -76,6 +105,12 @@ export default function StoriesPage() {
                   </p>
                 ) : null}
 
+                {story.topics?.length ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {story.topics.map((value) => <span key={value} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">{topicLabel(value)}</span>)}
+                  </div>
+                ) : null}
+
                 <div className="mt-auto flex items-center gap-3 text-[10px] text-muted-foreground">
                   <span className="tabular-nums">
                     {story.chapterCount} chapter
@@ -96,8 +131,14 @@ export default function StoriesPage() {
               </Link>
             );
           })}
-        </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
+}
+
+function topicLabel(value: string) {
+  return value.replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

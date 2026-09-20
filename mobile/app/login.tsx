@@ -2,9 +2,11 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
+  ImageBackground,
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   TextInput,
   View,
 } from 'react-native';
@@ -52,19 +54,31 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
+    <ImageBackground
+      source={require('../assets/images/login-story-moon.png')}
+      resizeMode="cover"
       style={{ flex: 1, backgroundColor: t.colors.background }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          justifyContent: 'center',
-          padding: t.spacing.xl,
-          paddingTop: insets.top + t.spacing.xl,
+      <View
+        pointerEvents="none"
+        style={{
+          ...StyleSheet.absoluteFill,
+          backgroundColor: 'rgba(10, 10, 10, 0.5)',
         }}
-        keyboardShouldPersistTaps="handled"
+      />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        <ScrollView
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: 'center',
+            padding: t.spacing.xl,
+            paddingTop: insets.top + t.spacing.xl,
+          }}
+          keyboardShouldPersistTaps="handled"
+        >
         <Text variant="display" style={{ marginBottom: t.spacing.xs }}>
           Eudora
         </Text>
@@ -146,7 +160,8 @@ export default function LoginScreen() {
             New here? <Text variant="label" color="primary">Create an account</Text>
           </Text>
         </Pressable>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </ImageBackground>
   );
 }

@@ -1,3 +1,4 @@
+import { circularAngleDifference, classifyAngle } from './widget-config.schema';
 import { ResolvedAnswer } from './widget-generator';
 
 export interface WidgetSubmission {
@@ -9,6 +10,7 @@ export interface WidgetSubmission {
     pairs?: [string, string][];
     shadedRegionIds?: string[];
     placements?: Record<string, string>;
+    angle?: number;
     [key: string]: unknown;
   } | null;
 }
@@ -146,6 +148,29 @@ export function gradeWidgetSubmission(
       }
 
       return { isCorrect: true };
+    }
+
+    case 'ANGLE_PROTRACTOR': {
+      const raw = submission.interactionState?.angle;
+      const measured = raw === undefined || raw === null ? NaN : Number(raw);
+      const { correctAngle, tolerance, classification } = resolvedAnswer;
+      const correctReveal = { correctAngle, classification };
+      if (Number.isNaN(measured)) {
+        return { isCorrect: false, correctReveal };
+      }
+      const withinTolerance =
+        circularAngleDifference(measured, correctAngle) <= tolerance;
+      // A submission that's numerically close but reads as the wrong kind
+      // of angle (e.g. drifted from acute into the right-angle band) hasn't
+      // actually demonstrated the classification the question is testing —
+      // both checks must hold, not just the numeric one.
+      const classificationMatches =
+        !classification ||
+        classifyAngle(measured, tolerance) === classification;
+      return {
+        isCorrect: withinTolerance && classificationMatches,
+        correctReveal,
+      };
     }
 
     case 'NUMERIC_OR_TEXT': {

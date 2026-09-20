@@ -304,7 +304,8 @@ export type WidgetType =
   | 'COORDINATE_PLOTTER'
   | 'GRID_MATCHING'
   | 'CODE_PLAYGROUND'
-  | 'SHAPE_SHADING';
+  | 'SHAPE_SHADING'
+  | 'ANGLE_PROTRACTOR';
 
 export interface QuestionOption {
   id: string;
@@ -316,6 +317,7 @@ export interface QuestionOption {
 export interface CardQuestion {
   id: string;
   prompt: string;
+  promptImageUrl: string | null;
   questionType: string;
   widgetType: WidgetType | null;
   /** Regenerated per attempt from a deterministic seed; never trust locally. */
@@ -539,6 +541,7 @@ export interface AttemptQuestionQuestion {
   id: string;
   questionType: string;
   prompt: string;
+  promptImageUrl: string | null;
   widgetType: WidgetType | null;
   widgetConfig: Record<string, any> | null;
   hints: string[];

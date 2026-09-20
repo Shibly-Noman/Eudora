@@ -8,6 +8,7 @@ export enum WidgetType {
   GRID_MATCHING = 'GRID_MATCHING',
   STANDARD_MCQ = 'STANDARD_MCQ',
   SHAPE_SHADING = 'SHAPE_SHADING',
+  ANGLE_PROTRACTOR = 'ANGLE_PROTRACTOR',
 }
 
 export class CreateLessonDto {

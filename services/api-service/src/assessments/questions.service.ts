@@ -139,6 +139,7 @@ export class QuestionsService {
         classId: emptyToNull(input.classId),
         questionType,
         prompt: requireText(input.prompt, 'prompt'),
+        promptImageUrl: emptyToNull(input.promptImageUrl),
         correctAnswer: emptyToNull(input.correctAnswer),
         difficulty,
         status: enumValue(
@@ -206,6 +207,9 @@ export class QuestionsService {
           ...(questionType !== undefined ? { questionType } : {}),
           ...(input.prompt !== undefined
             ? { prompt: requireText(input.prompt, 'prompt') }
+            : {}),
+          ...(input.promptImageUrl !== undefined
+            ? { promptImageUrl: emptyToNull(input.promptImageUrl) }
             : {}),
           ...(input.correctAnswer !== undefined
             ? { correctAnswer: emptyToNull(input.correctAnswer) }
