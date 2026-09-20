@@ -1,0 +1,101 @@
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[a4paper,margin=1.2cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{hyperref}
+
+\definecolor{primary}{HTML}{1F2937}
+\definecolor{review}{HTML}{9A3412}
+\hypersetup{
+    colorlinks=true,
+    urlcolor=primary,
+    linkcolor=primary,
+    pdftitle={Shibly Mohammad Noman - Senior Software Engineer},
+    pdfauthor={Shibly Mohammad Noman}
+}
+\titleformat{\section}{\large\bfseries\color{primary}}{}{0em}{}[\titlerule]
+\titlespacing*{\section}{0pt}{0.6em}{0.4em}
+\pagenumbering{gobble}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{2pt}
+\setlist[itemize]{leftmargin=*,label=\textbullet,itemsep=2pt,topsep=2pt}
+\urlstyle{same}
+
+% EDITORIAL DRAFT: numbered markers identify proposed, unverified claims.
+% See resume-editorial-notes.md for the corresponding verification checklist.
+% Confirm or replace claims before removing their markers; replace metrics
+% with defensible measurements or remove the metric clauses.
+\newcommand{\proposed}[2]{#2\textsuperscript{\textcolor{review}{[#1]}}}
+\newcommand{\metric}[1]{{\color{review}[#1]}}
+
+\begin{document}
+
+\begin{minipage}[t]{0.59\textwidth}
+    \vspace{0pt}
+    {\LARGE\textbf{Shibly Mohammad Noman}}\\[4pt]
+    \textbf{Senior Software Engineer | Python \& Backend Systems}\\[3pt]
+    Dhaka, Bangladesh
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.40\textwidth}
+    \vspace{0pt}
+    \raggedleft
+    +880 1307609911\\
+    \href{mailto:shibly.work@gmail.com}{shibly.work@gmail.com}\\
+    \href{https://www.linkedin.com/in/shibly-mohammad/}{linkedin.com/in/shibly-mohammad}\\
+    \href{https://github.com/Shibly-Noman}{github.com/Shibly-Noman}\\
+    \href{https://shibly-swe.vercel.app/}{shibly-swe.vercel.app}
+\end{minipage}
+
+{\footnotesize\color{review}Editorial draft: numbered markers refer to claims to verify in the companion notes.}
+
+\section*{Summary}
+Software engineer with experience since 2021 delivering applications across AdTech, finance, and digital media. Focused on Python backend services, data pipelines, API performance, and AI-powered applications, with Django, FastAPI, and PostgreSQL in the technical toolkit. Experienced in building systems from infrastructure through user-facing functionality.
+
+\section*{Work Experience}
+
+\textbf{Software Engineer, Consultant} \hfill Mar 2026 -- Jul 2026\\
+\href{https://www.ontiktechnology.com/}{\textit{Ontik Technology}} \textit{--- deployed at Akij Venture Group}
+\begin{itemize}
+    \item Built a natural-language query feature for a finance SaaS MVP using LangChain and LangGraph, enabling administrators and stakeholders to query legacy databases and helping advance the product from prototype to funding stage.
+    \item \proposed{1}{Built a retrieval-augmented generation (RAG) MVP for the RTM domain, exposing retrieval and LLM workflows through Python APIs built with FastAPI.}
+    \item \proposed{2}{Owned technical design for the natural-language query service, translating stakeholder reporting needs into backend requirements and defining the integration with legacy data sources.}
+\end{itemize}
+
+\textbf{Software Engineer L-II} \hfill Nov 2022 -- Dec 2025\\
+\href{https://vivasoftltd.com/}{\textit{Vivasoft Limited}} \textit{--- deployed at Azerion}
+\begin{itemize}
+    \item \proposed{3}{Built and maintained Python backend APIs in Django for AdTech campaign and reporting workflows, improving service performance and maintainability.}
+    \item \proposed{4}{Maintained data ingestion and transformation pipelines processing \metric{volume/day}; improved processing logic to reduce end-to-end runtime from \metric{before} to \metric{after}.}
+    \item \proposed{5}{Optimized database queries and Redis caching for backend APIs, reducing p95 response latency from \metric{before ms} to \metric{after ms}.}
+    \item \proposed{6}{Led delivery of \metric{specific backend service or feature} from design through release; reviewed pull requests and mentored teammates on API design and maintainable Python code.}
+    \item \proposed{7}{Maintained CI/CD pipelines and Docker-based deployments, and managed cloud infrastructure with Terraform to make environment provisioning repeatable.}
+    \item \proposed{8}{Partnered with Product to refine requirements, QA to validate releases, and DevOps to coordinate rollouts; contributed to design reviews across distributed services.}
+\end{itemize}
+
+\textbf{Software Engineer} \hfill Jul 2021 -- Oct 2022\\
+\href{https://gakktechnology.com/}{\textit{Gakk Media Limited}}
+\begin{itemize}
+    \item Delivered media and gaming applications; modernized legacy application architectures and introduced server-side rendering to improve SEO and discoverability.
+    \item Improved page-load performance and media delivery, and built a shared media player with anti-piracy measures. \proposed{9}{Reduced \metric{page-load measure} from \metric{before seconds} to \metric{after seconds}.}
+    \item Integrated Direct Carrier Billing for local and international subscriptions across media and sports platforms, and implemented Google Analytics event tracking to measure user interactions.
+\end{itemize}
+
+\section*{Technical Skills}
+\textbf{Backend:} Python, Django, FastAPI, Node.js, TypeScript, NestJS, Go\\
+\textbf{Data \& Messaging:} PostgreSQL, pgvector, Redis, MongoDB, Elasticsearch, Kafka, RabbitMQ\\
+\textbf{Cloud \& Delivery:} AWS, GCP, Terraform, Docker, Kubernetes, Git, GitHub Actions, GitLab CI, Bamboo, TeamCity\\
+\textbf{AI Applications:} LangChain, LangGraph, natural-language querying, RAG\\
+\textbf{Frontend:} React, Next.js, Vue.js, Angular
+
+\section*{Selected Projects}
+\href{https://github.com/Shibly-Noman/a-tracking-pixel}{\textbf{Tracking Pixels}} --- Cookieless event tracking and attribution using anonymous session modeling and first-party data collection to analyze user behavior and campaign performance.
+
+\href{https://github.com/The-Digital-Dude/eudora_v2}{\textbf{Eudora --- AI-Powered Learning Platform}} --- Tracks student mastery, detects learning gaps, and provides personalized, data-backed intervention recommendations.
+
+\href{https://shadhinmusic.com/}{\textbf{Shadhin Music}} --- Music, video, and podcast streaming platform with high-performance playback, recommendations, user-event tracking, and SEO optimization.
+
+\end{document}
